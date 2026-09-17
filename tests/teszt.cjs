@@ -238,6 +238,81 @@ const SOROK = beolvasott.sorok;
     egyenlo('minden sor bekerül valamelyik csoportba', ossz, E.idozit(t, {}, {}, {}, '2026-09-17').length);
 }
 
+// --- megyenapok --------------------------------------------------------------
+
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const alap = E.idozit(t, {}, {}, {}, '2026-09-17');
+
+    // Békés megye a HÉTFŐI nap: a békési látogatások hétfőre kerülnek.
+    const b = { megyeNapBe: true, megyeNapok: { 1: ['BÉKÉS'] } };
+    const megyes = E.idozit(t, b, {}, {}, '2026-09-17');
+
+    megyes.filter(function (s) { return s.megye === 'BÉKÉS' && s.latogatasBe; }).forEach(function (s) {
+        egyenlo('a békési látogatás hétfőre kerül (' + s.vevo + ')', s.latogatasDatum.getDay(), 1);
+        igaz('meg is jelöljük', s.latogatasMegyenap === true);
+    });
+
+    // A hívás alapból marad a helyén; csak ha kérjük, megy a megye napjára.
+    const csakLat = megyes.filter(function (s) { return s.megye === 'BÉKÉS'; })[0];
+    const alapSor = alap.filter(function (s) { return s.kulcs === csakLat.kulcs; })[0];
+    egyenlo('a hívás nem mozdul', napStr(csakLat.hivasDatum), napStr(alapSor.hivasDatum));
+
+    const hivassalIs = E.idozit(t, { megyeNapBe: true, megyeNapHivas: true, megyeNapok: { 1: ['BÉKÉS'] } }, {}, {}, '2026-09-17');
+    hivassalIs.filter(function (s) { return s.megye === 'BÉKÉS'; }).forEach(function (s) {
+        egyenlo('kérésre a hívás is hétfőre kerül', s.hivasDatum.getDay(), 1);
+    });
+
+    // Megye nélküli nap: akinek a megyéje nincs kijelölve, marad a helyén.
+    const csongradi = megyes.filter(function (s) { return s.megye === 'CSONGRÁD'; })[0];
+    const csongradiAlap = alap.filter(function (s) { return s.kulcs === csongradi.kulcs; })[0];
+    egyenlo('nap nélküli megye marad', napStr(csongradi.latogatasDatum), napStr(csongradiAlap.latogatasDatum));
+
+    // A megyelista forgalom szerint jön.
+    const lista = E.megyek(alap);
+    igaz('van megyelista', lista.length > 0);
+    igaz('csökkenő sorrend', lista.every(function (m, i) { return i === 0 || lista[i - 1].db >= m.db; }));
+}
+
+// --- naptár feltöltése -------------------------------------------------------
+
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const lista = E.idozit(t, {}, {}, {}, '2026-09-17');
+
+    egyenlo('célszám nélkül nincs feltöltés', E.feltolt(lista, SOROK, {}, '2026-09-17').length, 0);
+
+    // Napi 3 hívás célszámmal a szabad helyekre jelöltek kerülnek.
+    const elso = lista.filter(function (s) { return s.hivasBe; })
+        .sort(function (a, b) { return a.hivasDatum - b.hivasDatum; })[0];
+    const tol = napStr(elso.hivasDatum);
+    const ig = napStr(new Date(elso.hivasDatum.getFullYear(), elso.hivasDatum.getMonth(), elso.hivasDatum.getDate() + 10));
+
+    const jeloltek = E.feltolt(lista, SOROK, { napiHivas: 3, tol: tol, ig: ig }, '2026-09-17');
+    igaz('lettek jelöltek', jeloltek.length > 0);
+
+    jeloltek.forEach(function (j) {
+        igaz('a jelölt nem hétvégére kerül', j.datum.getDay() !== 0 && j.datum.getDay() !== 6);
+        igaz('a jelöltnek van indoklása', String(j.ok).indexOf('feltöltés') === 0);
+        igaz('a jelölt valódi vevő', ['Nagy Gazda Kft', 'Kis Tanya Bt', 'Mentendő Major Kft'].indexOf(j.vevo) !== -1);
+    });
+
+    // Ugyanazt a vevőt nem tesszük be kétszer – sem összesen, sem egy napon
+    // belül. (Aki több cikkcsoportból vett, az többször került a listába.)
+    const nevek = jeloltek.map(function (j) { return j.vevo; });
+    egyenlo('egy vevő csak egyszer jelölt', nevek.length, new Set(nevek).size);
+
+    const naponta = {};
+    jeloltek.forEach(function (j) {
+        const k = napStr(j.datum);
+        naponta[k] = naponta[k] || [];
+        naponta[k].push(j.vevo);
+    });
+    Object.keys(naponta).forEach(function (k) {
+        egyenlo('egy napon nincs ismétlődő jelölt (' + k + ')', naponta[k].length, new Set(naponta[k]).size);
+    });
+}
+
 // --- naptár és éves nézet ----------------------------------------------------
 
 {

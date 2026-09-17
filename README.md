@@ -59,7 +59,16 @@ nélkül is megy. Az XLSX olvasásához a lap egy külső könyvtárat tölt le.
     piros (az ideális nap elmúlt), a napi keret miatt csúsztatott szaggatott;
   - napi keret (legfeljebb ennyi hívás és látogatás naponta): ami nem fér bele, a
     következő munkanapra csúszik, a nagyobb vevő marad elöl; hétvégére nem tervez;
-  - kereső és „csak a látogatandók” szűrő, vevőnkénti rangsor (hányadik, mekkora rész).
+  - kereső és „csak a látogatandók” szűrő, vevőnkénti rangsor (hányadik, mekkora rész);
+  - **három nézet**: Lista, **Naptár** (havi rács, a tételek nyilakkal egy nappal arrébb
+    tehetők, a keret fölötti nap sárga) és **Éves** (cikkcsoportonként, hónapról hónapra —
+    mikor jön a dömping);
+  - **megyenapok**: megadható, melyik hétköznap melyik megyékbe mész, és a látogatások
+    (kérésre a hívások is) a hetükön belül a megyéjük napjára kerülnek;
+  - **naptár feltöltése**: napi célszámig jelölteket teszünk a szabad helyre — olyan
+    vevőket, akik vettek már a hét aktuális cikkcsoportjából, de arra a hétre nincsenek
+    betervezve (a nagyobb vevő megy előbb). A jelöltek külön jelöléssel látszanak, és
+    egyenként kivehetők.
 
   Fölötte a **bevételi terv → munkaigény**: a célösszegből vevőszám, abból látogatás,
   hívás és árajánlat — méret szerint más úton, meglévő és új vevőkre külön. Minden szám

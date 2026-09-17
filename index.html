@@ -165,6 +165,33 @@
                 (az ideális nap elmúlt), a <span class="csuszott-pelda">csúsztatott</span> szaggatott (a napi keret miatt később).
                 Fajonként is állítható a nap a csoport fejlécében.
             </p>
+            <details id="megyenapDoboz" class="alkartya">
+                <summary>🗺 Megyenapok – melyik napon melyik megyékbe megyek</summary>
+                <div class="beallitosor">
+                    <label class="jelolo"><input type="checkbox" id="megyeNapBe"> bekapcsolva</label>
+                    <label class="jelolo"><input type="checkbox" id="megyeNapHivas"> a hívásokat is a megye napjára</label>
+                </div>
+                <div id="megyeNapRacs" class="megyenapok"></div>
+                <p id="megyeNapInfo" class="halvany kicsi"></p>
+            </details>
+
+            <details id="feltoltesDoboz" class="alkartya">
+                <summary>🎯 Napi célszám és a naptár feltöltése</summary>
+                <div class="beallitosor">
+                    <label>Naponta ennyi hívás legyen <input type="number" id="napiHivasCel" min="0" max="100"></label>
+                    <label>Időszak <input type="date" id="feltoltesTol"></label>
+                    <label>– <input type="date" id="feltoltesIg"></label>
+                    <button type="button" id="feltoltesGomb" class="gomb">Feltöltés</button>
+                    <button type="button" id="feltoltesTorol" class="gomb halk">Jelöltek törlése</button>
+                </div>
+                <p class="halvany kicsi">
+                    A szabad helyekre olyan vevőket teszünk, akik <strong>vettek már</strong> a hét aktuális
+                    cikkcsoportjából, de arra a hétre nincsenek betervezve – a nagyobb vevő megy előbb.
+                    A jelöltek a naptárban külön jelöléssel látszanak.
+                </p>
+                <p id="feltoltesInfo"></p>
+            </details>
+
             <div class="beallitosor">
                 <div class="nezetvalto">
                     <button type="button" class="ful kicsi-ful aktiv" data-tervnezet="lista">Lista</button>

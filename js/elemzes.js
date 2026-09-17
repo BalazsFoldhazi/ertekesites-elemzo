@@ -476,6 +476,42 @@
             });
         });
 
+        // MEGYENAPOK: ha meg van adva, melyik hétköznap melyik megyékbe megyünk,
+        // a tétel a saját hetén belül a megyéje napjára kerül. A kézzel beírt
+        // dátumot nem írjuk felül – az a te döntésed volt.
+        if (beallitas && beallitas.megyeNapBe) {
+            var megyeNapjai = {};
+            Object.keys(beallitas.megyeNapok || {}).forEach(function (n) {
+                (beallitas.megyeNapok[n] || []).forEach(function (m) {
+                    megyeNapjai[m] = megyeNapjai[m] || [];
+                    megyeNapjai[m].push(Number(n));
+                });
+            });
+
+            var mozgatando = ['latogatas'].concat(beallitas.megyeNapHivas ? ['hivas'] : []);
+            sorok.forEach(function (s) {
+                var napjai = megyeNapjai[s.megye];
+                if (!napjai || !napjai.length) return;
+
+                mozgatando.forEach(function (mit) {
+                    var d = s[mit + 'Datum'];
+                    if (!d || s[mit + 'Sajat']) return;
+
+                    var hetfo = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+                    var legjobb = null;
+                    napjai.forEach(function (n) {
+                        var cel = new Date(hetfo.getFullYear(), hetfo.getMonth(), hetfo.getDate() + (n - 1));
+                        if (cel < most) cel = new Date(cel.getFullYear(), cel.getMonth(), cel.getDate() + 7);
+                        if (legjobb === null || Math.abs(cel - d) < Math.abs(legjobb - d)) legjobb = cel;
+                    });
+                    if (legjobb) {
+                        s[mit + 'Datum'] = legjobb;
+                        s[mit + 'Megyenap'] = true;
+                    }
+                });
+            });
+        }
+
         // Napi keret: a nagyobb vevő marad a napon, a kisebb csúszik.
         [['hivas', hivasMax], ['latogatas', latogatasMax]].forEach(function (p) {
             var mit = p[0];
@@ -520,6 +556,121 @@
 
         return Object.keys(gy).map(function (k) { return gy[k]; })
             .sort(function (a, b) { return b.ft - a.ft; });
+    }
+
+    /**
+     * A megyék listája a megyenapokhoz, forgalom szerint csökkenően.
+     *
+     * @return {Array<{megye: string, db: number}>}
+     */
+    function megyek(lista) {
+        var gy = {};
+        (lista || []).forEach(function (s) {
+            if (!s.megye) return;
+            gy[s.megye] = (gy[s.megye] || 0) + 1;
+        });
+
+        return Object.keys(gy).map(function (m) { return { megye: m, db: gy[m] }; })
+            .sort(function (a, b) { return b.db - a.db || a.megye.localeCompare(b.megye, 'hu'); });
+    }
+
+    /**
+     * NAPTÁR FELTÖLTÉSE: a napi célszámig jelölteket teszünk a szabad helyre.
+     *
+     * Jelölt az, aki VETT MÁR az adott héten aktuális cikkcsoportból, de azon a
+     * héten nincs betervezve. A nagyobb vevő megy előbb. Ez nem „új” vevő: a
+     * saját vevőkörből hozzuk vissza azt, aki épp kimaradna.
+     *
+     * A hét „aktuális fajai” a már betervezett tételekből adódnak – ahogy a
+     * szezon halad, úgy vált a lista is.
+     */
+    function feltolt(lista, sorok, beallitas, ma) {
+        var celHivas = Math.max(0, Number(beallitas && beallitas.napiHivas) || 0);
+        if (!celHivas) return [];
+
+        var tol = beallitas.tol ? nap(beallitas.tol) : nap(ma);
+        var ig = beallitas.ig ? nap(beallitas.ig) : new Date(tol.getFullYear(), tol.getMonth() + 3, tol.getDate());
+        if (ig < tol) return [];
+
+        // Ki mit vett valaha, és mekkora a forgalma.
+        var fajVevoi = {};
+        var vevoFt = {};
+        (sorok || []).forEach(function (s) {
+            var nev = String(s.vevo || '').trim();
+            if (nev === '') return;
+            var faj = csoportNev(s);
+            vevoFt[nev] = (vevoFt[nev] || 0) + ft(s);
+            fajVevoi[faj] = fajVevoi[faj] || {};
+            fajVevoi[faj][nev] = true;
+        });
+
+        var hetKulcs = function (d) {
+            var h = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+            return h.getFullYear() + '-' + h.getMonth() + '-' + h.getDate();
+        };
+
+        // Ki van már betervezve azon a héten, és melyik fajok aktuálisak akkor.
+        var hetiVevo = {};
+        var hetiFaj = {};
+        var napiDb = {};
+        (lista || []).forEach(function (s) {
+            if (!s.hivasBe || !s.hivasDatum) return;
+            var hk = hetKulcs(s.hivasDatum);
+            hetiVevo[hk] = hetiVevo[hk] || {};
+            hetiVevo[hk][s.vevo] = true;
+            hetiFaj[hk] = hetiFaj[hk] || {};
+            hetiFaj[hk][s.faj] = (hetiFaj[hk][s.faj] || 0) + 1;
+            var nk = ymd(s.hivasDatum);
+            napiDb[nk] = (napiDb[nk] || 0) + 1;
+        });
+
+        var jeloltek = [];
+        var mar = {};
+
+        for (var d = new Date(tol.getFullYear(), tol.getMonth(), tol.getDate()); d <= ig;
+            d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+            if (d.getDay() === 0 || d.getDay() === 6) continue;
+
+            var nk2 = ymd(d);
+            var hiany = celHivas - (napiDb[nk2] || 0);
+            if (hiany <= 0) continue;
+
+            var hk2 = hetKulcs(d);
+            var fajok = Object.keys(hetiFaj[hk2] || {})
+                .sort(function (a, b) { return hetiFaj[hk2][b] - hetiFaj[hk2][a]; });
+            if (!fajok.length) continue;
+
+            // A hét fajaiból a legnagyobb, még be nem tervezett vevők.
+            // Aki több cikkcsoportból is vett, az CSAK EGYSZER kerüljön a
+            // listába – különben ugyanaz a vevő többször jönne ki egy napra.
+            var sor = [];
+            var latott = {};
+            fajok.forEach(function (faj) {
+                Object.keys(fajVevoi[faj] || {}).forEach(function (nev) {
+                    if ((hetiVevo[hk2] || {})[nev] || mar[nev] || latott[nev]) return;
+                    latott[nev] = true;
+                    sor.push({ vevo: nev, faj: faj, ft: vevoFt[nev] || 0 });
+                });
+            });
+            sor.sort(function (a, b) { return b.ft - a.ft; });
+
+            sor.slice(0, hiany).forEach(function (j) {
+                mar[j.vevo] = true;
+                hetiVevo[hk2] = hetiVevo[hk2] || {};
+                hetiVevo[hk2][j.vevo] = true;
+                napiDb[nk2] = (napiDb[nk2] || 0) + 1;
+                jeloltek.push({
+                    kulcs: 'jelolt|' + j.vevo + '|' + nk2,
+                    vevo: j.vevo,
+                    faj: j.faj,
+                    evesFt: j.ft,
+                    datum: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
+                    ok: 'feltöltés – vett már ' + j.faj + '-ból, de erre a hétre nem volt betervezve',
+                });
+            });
+        }
+
+        return jeloltek;
     }
 
     /** Helyi nap szerinti 'ÉÉÉÉ-HH-NN' (a naptár napjaihoz). */
@@ -623,6 +774,8 @@
         csoportosit: csoportosit,
         naptarAdat: naptarAdat,
         evesAdat: evesAdat,
+        megyek: megyek,
+        feltolt: feltolt,
         munkaigenyAdat: munkaigenyAdat,
         ALKALOM_RES: ALKALOM_RES,
     };

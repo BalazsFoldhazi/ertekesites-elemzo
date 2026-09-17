@@ -143,6 +143,30 @@ td input.szeles { width: 9rem; }
 
 .figyelem { color: var(--sarga); font-size: 14px; }
 
+/* Kártyán belüli, összecsukható rész */
+.alkartya {
+    border: 1px solid var(--keret); border-radius: 10px;
+    padding: 10px 12px; margin: 10px 0;
+    background: rgba(255, 255, 255, .015);
+}
+.alkartya > summary { cursor: pointer; user-select: none; font-weight: 600; font-size: 14px; }
+
+/* Megyenapok */
+.megyenapok { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.megyenap { border: 1px solid var(--keret); border-radius: 9px; padding: 8px; }
+.megyenap > b { display: block; font-size: 12px; margin-bottom: 6px; color: var(--halvany); }
+.megyenap button {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: 1px solid var(--keret); color: var(--halvany);
+    border-radius: 7px; padding: 3px 7px; font-size: 12px; margin-bottom: 4px; cursor: pointer;
+    font-family: inherit;
+}
+.megyenap button:hover { color: var(--szoveg); }
+.megyenap button.aktiv { border-color: var(--sarga); color: var(--sarga); }
+
+/* Jelölt a naptárban */
+.naptar .tetel.jelolt .nev { color: var(--zold-vilagos); font-style: italic; }
+
 /* Nézetváltó és naptár */
 .nezetvalto { display: flex; gap: 6px; }
 .ful.kicsi-ful { padding: 5px 14px; font-size: 13px; }
