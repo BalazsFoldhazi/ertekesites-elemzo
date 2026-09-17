@@ -21,7 +21,12 @@
         korrekcio: 0,
         besorolas: { platinaFt: 5000000, kozel: 70, szuro: '' },
         terv: { cel: 300000000, tol: '', ig: '' },
-        tervB: { hivasNap: 30, latogatasNap: 14, pareto: 70 },
+        tervB: { hivasNap: 30, latogatasNap: 14, pareto: 70, hivasMax: 15, latogatasMax: 3 },
+        // Fajonkénti nap-eltolás és soronkénti kézi módosítás (nap, dátum, ki-be).
+        tervCsoport: {},
+        tervEgyeni: {},
+        tervSzuro: { q: '', csakLatogatando: false },
+        tervCsoportosit: true,
         mi: { hatarok: {}, meretArany: { partner: {}, piaci: {} }, atlag: { partner: {}, piaci: {} }, napi: {}, partnerArany: null },
     };
 
@@ -121,6 +126,8 @@
             localStorage.setItem(TAR, JSON.stringify({
                 sorok: A.sorok, forras: A.forras, szuro: A.szuro, besorolas: A.besorolas,
                 terv: A.terv, tervB: A.tervB, mi: A.mi, korrekcio: A.korrekcio,
+                tervCsoport: A.tervCsoport, tervEgyeni: A.tervEgyeni, tervSzuro: A.tervSzuro,
+                tervCsoportosit: A.tervCsoportosit,
             }));
         } catch (e) {
             // Tele a tár vagy privát ablak: a lap ettől még működik, csak nem emlékszik.
@@ -133,10 +140,11 @@
             if (!t || !Array.isArray(t.sorok) || !t.sorok.length) return false;
             A.sorok = t.sorok;
             A.forras = t.forras || '';
-            ['szuro', 'besorolas', 'terv', 'tervB', 'mi'].forEach(function (k) {
+            ['szuro', 'besorolas', 'terv', 'tervB', 'mi', 'tervCsoport', 'tervEgyeni', 'tervSzuro'].forEach(function (k) {
                 if (t[k] && typeof t[k] === 'object') A[k] = Object.assign(A[k], t[k]);
             });
             A.korrekcio = Number(t.korrekcio) || 0;
+            if (t.tervCsoportosit !== undefined) A.tervCsoportosit = !!t.tervCsoportosit;
             return true;
         } catch (e) { return false; }
     }
@@ -630,32 +638,201 @@
                     : '⚠️ Nem fér bele: a beállított napi célszámokkal ' + szam(e.napKell) + ' munkanap kellene, de az időszakban csak ' + szam(e.napok) + ' van.'));
     }
 
+    /** Dátum HELYI nap szerint (a date mezők ezt várják). */
+    function napStr(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    /** Egy sor kézi módosításai. */
+    function egyeni(kulcs) {
+        A.tervEgyeni[kulcs] = A.tervEgyeni[kulcs] || {};
+        return A.tervEgyeni[kulcs];
+    }
+
+    function ujraTerv() {
+        ment();
+        rajzolTerv(szurt());
+        rajzolMunkaigeny();
+    }
+
+    /** Nap-mező (hány nappal az évforduló előtt) egy sorhoz vagy egy fajhoz. */
+    function napMezo(ertek, sajat, beallit) {
+        var i = el('input', sajat ? 'sajat' : '');
+        i.type = 'number';
+        i.min = '0';
+        i.max = '365';
+        i.value = ertek;
+        i.addEventListener('change', function () {
+            beallit(this.value.trim() === '' ? null : Math.max(0, Math.min(365, Number(this.value) || 0)));
+            ujraTerv();
+        });
+        return i;
+    }
+
+    /** Dátum-mező: ide konkrét napot lehet írni, az felülír mindent. */
+    function datumMezo(d, s, mit) {
+        var i = el('input', [s[mit + 'Sajat'] ? 'sajat' : '', s[mit + 'Kesve'] ? 'kesve' : '', s[mit + 'Csuszott'] ? 'csuszott' : ''].filter(Boolean).join(' '));
+        i.type = 'date';
+        i.value = napStr(d);
+        i.title = (s[mit + 'Kesve'] ? 'Késve: az ideális nap már elmúlt. ' : '')
+            + (s[mit + 'Csuszott'] ? 'A napi keret miatt későbbre került. ' : '')
+            + 'Évforduló: ' + datumCimke(napStr(s.evfordulo));
+        i.addEventListener('change', function () {
+            egyeni(s.kulcs)[mit + 'Datum'] = this.value || null;
+            ujraTerv();
+        });
+        return i;
+    }
+
+    function pipa(be, cim, beallit) {
+        var i = el('input');
+        i.type = 'checkbox';
+        i.checked = be;
+        i.title = cim;
+        i.addEventListener('change', function () { beallit(this.checked); ujraTerv(); });
+        return i;
+    }
+
+    function tervSor(s, rang) {
+        var tr = el('tr', s.hivasBe || s.latogatasBe ? '' : 'ki');
+
+        var c1 = el('td');
+        c1.append(pipa(s.hivasBe, 'Hívás be/ki', function (v) { egyeni(s.kulcs).hivasBe = v; }));
+        tr.append(c1);
+
+        var r = rang[s.vevo] || { hely: 0, resz: 0 };
+        var c2 = el('td');
+        c2.append(el('span', '', s.vevo));
+        c2.append(el('span', 'alcim', [s.megye || '—', s.uzletkoto].filter(Boolean).join(' · ')
+            + ' · #' + r.hely + ' · éves ' + rovidFt(s.evesFt) + ' Ft · ' + szam(r.resz, 1) + '%'));
+        tr.append(c2);
+
+        var c3 = el('td', 'tobbsoros');
+        c3.append(el('span', '', s.termekek.slice(0, 3).join(', ')));
+        c3.append(el('span', 'alcim', datumCimke(s.alkalomDatum)));
+        tr.append(c3);
+
+        var c4 = el('td', 'szam');
+        c4.append(el('span', '', szam(s.ft) + ' Ft'));
+        if (s.kg > 0) c4.append(el('span', 'alcim', szam(s.kg) + ' kg'));
+        tr.append(c4);
+
+        var c5 = el('td', 'nap');
+        c5.append(napMezo(s.hivasNap, s.hivasSajat, function (v) {
+            egyeni(s.kulcs).hivas = v;
+            egyeni(s.kulcs).hivasDatum = null;
+        }));
+        tr.append(c5);
+
+        var c6 = el('td', 'datum');
+        c6.append(datumMezo(s.hivasDatum, s, 'hivas'));
+        tr.append(c6);
+
+        var c7 = el('td');
+        c7.append(pipa(s.latogatasBe, 'Látogatás be/ki', function (v) { egyeni(s.kulcs).latogatasBe = v; }));
+        tr.append(c7);
+
+        var c8 = el('td', 'nap');
+        c8.append(napMezo(s.latogatasNap, s.latogatasSajat, function (v) {
+            egyeni(s.kulcs).latogatas = v;
+            egyeni(s.kulcs).latogatasDatum = null;
+        }));
+        tr.append(c8);
+
+        var c9 = el('td', 'datum');
+        if (s.latogatasBe) c9.append(datumMezo(s.latogatasDatum, s, 'latogatas'));
+        else c9.append(el('span', 'halvany', '—'));
+        tr.append(c9);
+
+        return tr;
+    }
+
     function rajzolTerv(sorok) {
-        $('hivasNap').value = A.tervB.hivasNap;
-        $('latogatasNap').value = A.tervB.latogatasNap;
-        $('pareto').value = A.tervB.pareto;
+        ['hivasNap', 'latogatasNap', 'pareto', 'hivasMax', 'latogatasMax'].forEach(function (k) { $(k).value = A.tervB[k]; });
+        $('tervKereses').value = A.tervSzuro.q;
+        $('csakLatogatando').checked = A.tervSzuro.csakLatogatando;
 
         var t = E.tervezo(sorok, A.tervB, maStr());
-        var o = t.osszegzes;
-        $('tervOsszegzes').textContent = szam(o.vevo) + ' vevő · ' + szam(o.alkalom) + ' megkeresés · '
-            + szam(o.latogatas) + ' látogatás · a forgalom felső ' + A.tervB.pareto + '%-át ' + szam(o.nagyVevo) + ' vevő adja';
+        var lista = E.idozit(t, A.tervB, A.tervCsoport, A.tervEgyeni, maStr());
 
-        tabla($('tervTabla'),
-            ['Hívás', 'Látogatás', 'Vevő', 'Tavaly ekkor ezt vette', { szoveg: 'Akkori érték', szam: true }],
-            t.sorok.slice(0, LISTA_MAX).map(function (s) {
-                return {
-                    cellak: [
-                        datumCimke(s.hivas),
-                        s.latogatas ? '★ ' + datumCimke(s.latogatas) : '—',
-                        { szoveg: s.vevo, alcim: [s.megye || '—', s.uzletkoto].filter(Boolean).join(' · ') + ' · éves forgalma ' + szam(s.evesFt) + ' Ft' },
-                        { szoveg: s.termekek.slice(0, 3).join(', '), alcim: datumCimke(s.alkalomDatum) },
-                        { szoveg: szam(s.ft) + ' Ft', alcim: s.kg > 0 ? szam(s.kg) + ' kg' : '', szam: true },
-                    ],
-                };
-            }));
+        // Rangsor: hányadik a vevő az éves forgalma szerint, és mekkora a részesedése.
+        var vevoFt = {};
+        lista.forEach(function (s) { vevoFt[s.vevo] = s.evesFt; });
+        var nevek = Object.keys(vevoFt).sort(function (a, b) { return vevoFt[b] - vevoFt[a]; });
+        var osszFt = nevek.reduce(function (a, k) { return a + vevoFt[k]; }, 0);
+        var rang = {};
+        nevek.forEach(function (k, i) { rang[k] = { hely: i + 1, resz: osszFt > 0 ? vevoFt[k] / osszFt * 100 : 0 }; });
 
-        $('tervTobb').textContent = t.sorok.length > LISTA_MAX
-            ? 'A lista az első ' + szam(LISTA_MAX) + ' megkeresést mutatja a ' + szam(t.sorok.length) + '-ból – szűkíts a szűrőkkel.'
+        var q = (A.tervSzuro.q || '').toLowerCase();
+        var szurtLista = lista.filter(function (s) {
+            if (A.tervSzuro.csakLatogatando && !s.latogatasBe) return false;
+            if (!q) return true;
+            return (s.vevo + ' ' + (s.megye || '') + ' ' + (s.uzletkoto || '')).toLowerCase().indexOf(q) !== -1;
+        });
+
+        var hivasDb = szurtLista.filter(function (s) { return s.hivasBe; }).length;
+        var latDb = szurtLista.filter(function (s) { return s.latogatasBe; }).length;
+        $('tervOsszegzes').textContent = szam(nevek.length) + ' vevő · ' + szam(szurtLista.length) + ' megkeresés · '
+            + szam(hivasDb) + ' hívás · ' + szam(latDb) + ' látogatás'
+            + ' · a forgalom felső ' + A.tervB.pareto + '%-át ' + szam(t.osszegzes.nagyVevo) + ' vevő adja'
+            + (A.tervB.hivasMax > 0 ? ' · napi keret: ' + A.tervB.hivasMax + ' hívás' : '')
+            + (A.tervB.latogatasMax > 0 ? ' · ' + A.tervB.latogatasMax + ' látogatás' : '');
+
+        var tb = $('tervTabla');
+        tb.textContent = '';
+        var thead = el('thead');
+        var fejsor = el('tr');
+        ['📞', 'Vevő', 'Tavaly ekkor ezt vette', { szoveg: 'Akkori érték', szam: true },
+            'Hívás · nap', 'Hívás · dátum', '🚗', 'Látogatás · nap', 'Látogatás · dátum'].forEach(function (f) {
+            fejsor.append(el('th', (typeof f === 'object' && f.szam) ? 'szam' : '', typeof f === 'string' ? f : f.szoveg));
+        });
+        thead.append(fejsor);
+        var tbody = el('tbody');
+        tb.append(thead, tbody);
+
+        var maradt = LISTA_MAX;
+
+        if (A.tervCsoportosit) {
+            E.csoportosit(szurtLista).forEach(function (cs) {
+                if (maradt <= 0) return;
+                var tr = el('tr', 'fajsor');
+                var td = el('td');
+                td.colSpan = 4;
+                td.append(el('span', 'fajnev', cs.faj));
+                td.append(el('span', 'alcim', szam(cs.sorok.length) + ' alkalom · 📞 ' + szam(cs.hivas) + ' · 🚗 ' + szam(cs.latogatas)
+                    + ' · ' + rovidFt(cs.ft) + ' Ft'));
+                tr.append(td);
+
+                // Fajszintű nap-beállítás: egy szezonban egy fajjal dolgozik az ember.
+                var fajB = A.tervCsoport[cs.faj] || {};
+                var hn = el('td', 'nap');
+                hn.append(napMezo(fajB.hivas !== undefined && fajB.hivas !== null ? fajB.hivas : A.tervB.hivasNap,
+                    fajB.hivas !== undefined && fajB.hivas !== null, function (v) {
+                        A.tervCsoport[cs.faj] = A.tervCsoport[cs.faj] || {};
+                        A.tervCsoport[cs.faj].hivas = v;
+                    }));
+                tr.append(hn, el('td', '', 'a fajnál'));
+
+                tr.append(el('td'));
+                var ln = el('td', 'nap');
+                ln.append(napMezo(fajB.latogatas !== undefined && fajB.latogatas !== null ? fajB.latogatas : A.tervB.latogatasNap,
+                    fajB.latogatas !== undefined && fajB.latogatas !== null, function (v) {
+                        A.tervCsoport[cs.faj] = A.tervCsoport[cs.faj] || {};
+                        A.tervCsoport[cs.faj].latogatas = v;
+                    }));
+                tr.append(ln, el('td', '', 'a fajnál'));
+                tbody.append(tr);
+
+                cs.sorok.slice(0, maradt).forEach(function (s) { tbody.append(tervSor(s, rang)); });
+                maradt -= cs.sorok.length;
+            });
+        } else {
+            szurtLista.slice(0, LISTA_MAX).forEach(function (s) { tbody.append(tervSor(s, rang)); });
+            maradt -= szurtLista.length;
+        }
+
+        $('tervTobb').textContent = szurtLista.length > LISTA_MAX
+            ? 'A lista az első ' + szam(LISTA_MAX) + ' megkeresést mutatja a ' + szam(szurtLista.length) + '-ból – szűkíts a keresővel vagy a szűrőkkel.'
             : '';
     }
 
@@ -743,13 +920,34 @@
         });
         $('besorolasSzuro').addEventListener('change', function () { A.besorolas.szuro = this.value; ment(); rajzolVevok(szurt()); });
 
-        ['hivasNap', 'latogatasNap', 'pareto'].forEach(function (k) {
-            $(k).addEventListener('input', function () {
+        // A lista újrarajzolása elveszi a fókuszt, ezért ezek „change”-re
+        // futnak, nem minden leütésre.
+        ['hivasNap', 'latogatasNap', 'pareto', 'hivasMax', 'latogatasMax'].forEach(function (k) {
+            $(k).addEventListener('change', function () {
                 A.tervB[k] = Number(this.value) || 0;
-                ment();
-                rajzolTerv(szurt());
-                rajzolMunkaigeny();
+                ujraTerv();
             });
+        });
+
+        $('tervKereses').addEventListener('input', function () {
+            A.tervSzuro.q = this.value;
+            ment();
+            rajzolTerv(szurt());
+        });
+        $('csakLatogatando').addEventListener('change', function () {
+            A.tervSzuro.csakLatogatando = this.checked;
+            ment();
+            rajzolTerv(szurt());
+        });
+        $('tervCsoportGomb').addEventListener('click', function () {
+            A.tervCsoportosit = !A.tervCsoportosit;
+            ment();
+            rajzolTerv(szurt());
+        });
+        $('tervAlap').addEventListener('click', function () {
+            A.tervEgyeni = {};
+            A.tervCsoport = {};
+            ujraTerv();
         });
 
         $('celFt').addEventListener('input', function () { A.terv.cel = Number(this.value) || 0; ment(); rajzolMunkaigeny(); });

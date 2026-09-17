@@ -51,10 +51,22 @@ nélkül is megy. Az XLSX olvasásához a lap egy külső könyvtárat tölt le.
   A szint és a „közel” határ a lapon átírható (alapból 5 M Ft és 70 %). A szint éves
   árbevétel, ezért a besorolás mindig egy üzleti évre néz.
 - **Hívás- és látogatásterv** — a tavalyi vásárlás évfordulója előtt keressük meg a vevőt;
-  a 30 napon belüli vásárlások egy alkalomnak számítanak. Fölötte a **bevételi terv →
-  munkaigény**: a célösszegből vevőszám, abból látogatás, hívás és árajánlat — méret
-  szerint más úton, meglévő és új vevőkre külön. Minden szám átírható; üresen hagyva a
-  bázisból számolt érték marad.
+  a 30 napon belüli vásárlások egy alkalomnak számítanak. A lista **munkaeszköz**:
+  - cikkcsoportonként csoportosítva (egy szezonban egy fajjal dolgozik az ember), a
+    csoport fejlécében a faj saját nap-beállításával;
+  - soronként pipával ki-be kapcsolható a hívás és a látogatás;
+  - a „nap” és a konkrét dátum soronként átírható — a saját érték keretes, a késve dátum
+    piros (az ideális nap elmúlt), a napi keret miatt csúsztatott szaggatott;
+  - napi keret (legfeljebb ennyi hívás és látogatás naponta): ami nem fér bele, a
+    következő munkanapra csúszik, a nagyobb vevő marad elöl; hétvégére nem tervez;
+  - kereső és „csak a látogatandók” szűrő, vevőnkénti rangsor (hányadik, mekkora rész).
+
+  Fölötte a **bevételi terv → munkaigény**: a célösszegből vevőszám, abból látogatás,
+  hívás és árajánlat — méret szerint más úton, meglévő és új vevőkre külön. Minden szám
+  átírható; üresen hagyva a bázisból számolt érték marad.
+
+  A kézi módosítások ezen a gépen megmaradnak; a „Kézi módosítások törlése” visszaállít.
+  **Telefonszám szándékosan nincs a listán** (GDPR).
 
 ## Szerkezet
 

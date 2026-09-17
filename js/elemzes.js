@@ -386,6 +386,142 @@
         };
     }
 
+    /**
+     * A terv IDŐZÍTÉSE: a nyers megkeresésekből konkrét napok lesznek.
+     *
+     * A sorrend, ahogy a nap eldől:
+     *  1. soronkénti saját dátum (amit kézzel írtak be),
+     *  2. soronkénti saját nap-eltolás,
+     *  3. a cikkcsoport (faj) nap-eltolása,
+     *  4. a globális beállítás.
+     *
+     * Utána: hétvégére nem tervezünk, a már elmúlt nap a legközelebbi munkanapra
+     * kerül („késve”), és ha a napi keret betelt, a kisebb vevő a következő
+     * munkanapra csúszik – a nagyobb marad elöl.
+     */
+    function idozit(terv, beallitas, csoportNapok, egyeni, ma) {
+        var b = terv.beallitas;
+        var hivasMax = Number(beallitas && beallitas.hivasMax) || 0;
+        var latogatasMax = Number(beallitas && beallitas.latogatasMax) || 0;
+        var most = nap(ma);
+        var cs = csoportNapok || {};
+        var eg = egyeni || {};
+
+        function munkanap(d) {
+            var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            while (x.getDay() === 0 || x.getDay() === 6) x = new Date(x.getFullYear(), x.getMonth(), x.getDate() + 1);
+            return x;
+        }
+        function kovetkezo(d) { return munkanap(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)); }
+        function kulcsa(s) { return s.vevo + '|' + s.alkalomDatum; }
+
+        var sorok = (terv.sorok || []).map(function (s) {
+            var kulcs = kulcsa(s);
+            var e = eg[kulcs] || {};
+            var faj = s.termekek.length ? s.termekek[0] : '(nincs cikkcsoport)';
+            var fajNap = cs[faj] || {};
+
+            // Az évfordulót visszaszámoljuk: a hívás dátuma + a hozzá tartozó nap.
+            var evfordulo = new Date(s.hivas.getFullYear(), s.hivas.getMonth(), s.hivas.getDate() + b.hivasNap);
+
+            var hivasNap = e.hivas !== undefined && e.hivas !== null ? e.hivas
+                : (fajNap.hivas !== undefined && fajNap.hivas !== null ? fajNap.hivas : b.hivasNap);
+            var latogatasNap = e.latogatas !== undefined && e.latogatas !== null ? e.latogatas
+                : (fajNap.latogatas !== undefined && fajNap.latogatas !== null ? fajNap.latogatas : b.latogatasNap);
+
+            var hivasSajat = !!e.hivasDatum || e.hivas !== undefined && e.hivas !== null;
+            var hivasDatum = e.hivasDatum ? nap(e.hivasDatum)
+                : new Date(evfordulo.getFullYear(), evfordulo.getMonth(), evfordulo.getDate() - hivasNap);
+
+            var latogatasSajat = !!e.latogatasDatum || e.latogatas !== undefined && e.latogatas !== null;
+            var latogatasDatum = e.latogatasDatum ? nap(e.latogatasDatum)
+                : new Date(evfordulo.getFullYear(), evfordulo.getMonth(), evfordulo.getDate() - latogatasNap);
+
+            return {
+                kulcs: kulcs,
+                vevo: s.vevo,
+                megye: s.megye,
+                uzletkoto: s.uzletkoto,
+                evesFt: s.evesFt,
+                nagy: s.nagy,
+                faj: faj,
+                termekek: s.termekek,
+                alkalomDatum: s.alkalomDatum,
+                ft: s.ft,
+                kg: s.kg,
+                evfordulo: evfordulo,
+                hivasNap: hivasNap,
+                latogatasNap: latogatasNap,
+                hivasSajat: hivasSajat,
+                latogatasSajat: latogatasSajat,
+                // Alapból mindenkit hívunk; látogatni a nagyokat (Pareto) – ez felülírható.
+                hivasBe: e.hivasBe !== undefined ? !!e.hivasBe : true,
+                latogatasBe: e.latogatasBe !== undefined ? !!e.latogatasBe : !!s.nagy,
+                hivasDatum: hivasDatum,
+                latogatasDatum: latogatasDatum,
+                hivasKesve: false,
+                latogatasKesve: false,
+                hivasCsuszott: false,
+                latogatasCsuszott: false,
+            };
+        });
+
+        // Hétvége és múlt: a legközelebbi munkanapra.
+        sorok.forEach(function (s) {
+            ['hivas', 'latogatas'].forEach(function (m) {
+                var d = s[m + 'Datum'];
+                if (!d) return;
+                if (d < most) { s[m + 'Kesve'] = true; d = most; }
+                s[m + 'Datum'] = munkanap(d);
+            });
+        });
+
+        // Napi keret: a nagyobb vevő marad a napon, a kisebb csúszik.
+        [['hivas', hivasMax], ['latogatas', latogatasMax]].forEach(function (p) {
+            var mit = p[0];
+            var keret = p[1];
+            if (!(keret > 0)) return;
+
+            var aktivak = sorok.filter(function (s) { return s[mit + 'Be']; })
+                .sort(function (a, c) {
+                    return (a[mit + 'Datum'] - c[mit + 'Datum']) || (c.evesFt - a.evesFt);
+                });
+
+            var napiDb = {};
+            aktivak.forEach(function (s) {
+                var d = s[mit + 'Datum'];
+                var k = d.getTime();
+                while ((napiDb[k] || 0) >= keret) {
+                    d = kovetkezo(d);
+                    k = d.getTime();
+                    s[mit + 'Csuszott'] = true;
+                }
+                napiDb[k] = (napiDb[k] || 0) + 1;
+                s[mit + 'Datum'] = d;
+            });
+        });
+
+        return sorok;
+    }
+
+    /**
+     * A lista cikkcsoportonként csoportosítva – a tervező így haladható végig:
+     * egy szezonban egy fajjal foglalkozik az ember.
+     */
+    function csoportosit(sorok) {
+        var gy = {};
+        sorok.forEach(function (s) {
+            gy[s.faj] = gy[s.faj] || { faj: s.faj, sorok: [], hivas: 0, latogatas: 0, ft: 0 };
+            gy[s.faj].sorok.push(s);
+            gy[s.faj].ft += s.ft;
+            if (s.hivasBe) gy[s.faj].hivas++;
+            if (s.latogatasBe) gy[s.faj].latogatas++;
+        });
+
+        return Object.keys(gy).map(function (k) { return gy[k]; })
+            .sort(function (a, b) { return b.ft - a.ft; });
+    }
+
     /** A munkaigény-motor bemenete: a bázis vevői és ami már a listán van. */
     function munkaigenyAdat(sorok, terv, tervezoEredmeny, ma) {
         var v = vevok(sorok).map(function (x) { return { nev: x.vevo, ft: x.netto }; });
@@ -412,6 +548,8 @@
         besorolas: besorolas,
         elorejelzes: elorejelzes,
         tervezo: tervezo,
+        idozit: idozit,
+        csoportosit: csoportosit,
         munkaigenyAdat: munkaigenyAdat,
         ALKALOM_RES: ALKALOM_RES,
     };

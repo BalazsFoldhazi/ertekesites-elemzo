@@ -168,6 +168,76 @@ const SOROK = beolvasott.sorok;
     egyenlo('a kis vevőt csak hívjuk', kicsi.latogatas, null);
 }
 
+// --- időzítés: fajonkénti és soronkénti felülírás, keret, hétvége ------------
+
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const lista = E.idozit(t, {}, {}, {}, '2026-09-17');
+
+    egyenlo('minden megkeresés bekerül', lista.filter(function (s) { return s.hivasBe; }).length, lista.length);
+
+    const nagy = lista.filter(function (s) { return s.vevo === 'Nagy Gazda Kft'; })[0];
+    igaz('a nagy vevőt látogatjuk is', nagy.latogatasBe);
+    egyenlo('a fő cikkcsoport dönti el a csoportot', nagy.faj, 'LUCERNA');
+
+    lista.forEach(function (s) {
+        igaz('hívás nem hétvégére esik (' + s.vevo + ')', s.hivasDatum.getDay() !== 0 && s.hivasDatum.getDay() !== 6);
+    });
+
+    const kicsi = lista.filter(function (s) { return s.vevo === 'Kis Tanya Bt'; })[0];
+    igaz('a kis vevőt alapból nem látogatjuk', !kicsi.latogatasBe);
+}
+
+// Fajonkénti nap: 0 nappal az évforduló előtt → későbbi dátum, mint 30 nappal.
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const alap = E.idozit(t, {}, {}, {}, '2026-09-17').filter(function (s) { return s.faj === 'LUCERNA'; })[0];
+    const kesobb = E.idozit(t, {}, { LUCERNA: { hivas: 0 } }, {}, '2026-09-17').filter(function (s) { return s.faj === 'LUCERNA'; })[0];
+
+    egyenlo('a faj nap-beállítása érvényesül', kesobb.hivasNap, 0);
+    igaz('0 nappal később van, mint 30 nappal', kesobb.hivasDatum > alap.hivasDatum);
+    // A „saját érték” jelölés a SORÉ: különben nem lehetne megkülönböztetni az
+    // egyedileg átírt sort attól, amelyik csak a faj beállítását örökli. A faj
+    // saját jelölést a csoport fejlécében kap.
+    igaz('a sor nem számít egyedileg átírtnak', !kesobb.hivasSajat);
+}
+
+// Soronkénti kikapcsolás és kézi dátum.
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const elso = E.idozit(t, {}, {}, {}, '2026-09-17')[0];
+
+    const egy = {};
+    egy[elso.kulcs] = { hivasBe: false, latogatasDatum: '2027-03-01' };
+    const ujra = E.idozit(t, {}, {}, egy, '2026-09-17').filter(function (s) { return s.kulcs === elso.kulcs; })[0];
+
+    igaz('a hívás kikapcsolható', !ujra.hivasBe);
+    igaz('a kézi dátum saját értékként jelenik meg', ujra.latogatasSajat);
+    igaz('a kézi dátum érvényesül', napStr(ujra.latogatasDatum) >= '2027-03-01');
+}
+
+// Napi keret: egy napra egy hívás – a többi a következő munkanapra csúszik.
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const lista = E.idozit(t, { hivasMax: 1 }, {}, {}, '2026-09-17');
+    const napok = {};
+    lista.filter(function (s) { return s.hivasBe; }).forEach(function (s) {
+        const k = napStr(s.hivasDatum);
+        napok[k] = (napok[k] || 0) + 1;
+    });
+    const tulsok = Object.keys(napok).filter(function (k) { return napok[k] > 1; });
+    egyenlo('egy napra legfeljebb egy hívás', tulsok.length, 0);
+}
+
+// Csoportosítás cikkcsoportonként.
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const csoportok = E.csoportosit(E.idozit(t, {}, {}, {}, '2026-09-17'));
+    igaz('van csoport', csoportok.length > 0);
+    const ossz = csoportok.reduce(function (a, c) { return a + c.sorok.length; }, 0);
+    egyenlo('minden sor bekerül valamelyik csoportba', ossz, E.idozit(t, {}, {}, {}, '2026-09-17').length);
+}
+
 // --- munkaigény (a lapon használt bemenettel) --------------------------------
 
 {

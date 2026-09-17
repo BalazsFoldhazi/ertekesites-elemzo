@@ -150,7 +150,21 @@
                 <label>Hívás · nap az évforduló előtt <input type="number" id="hivasNap" min="0" max="180"></label>
                 <label>Látogatás · nap előtte <input type="number" id="latogatasNap" min="0" max="180"></label>
                 <label>Látogatás a forgalom felső %-ára <input type="number" id="pareto" min="10" max="100"></label>
+                <label>Naponta legfeljebb <input type="number" id="hivasMax" min="0" max="200"> hívás</label>
+                <label>és <input type="number" id="latogatasMax" min="0" max="50"> látogatás</label>
             </div>
+            <div class="beallitosor">
+                <label>Keresés <input type="search" id="tervKereses" placeholder="vevő vagy megye"></label>
+                <label class="jelolo"><input type="checkbox" id="csakLatogatando"> csak a látogatandók</label>
+                <button type="button" id="tervCsoportGomb" class="gomb halk">Csak fajok / mind</button>
+                <button type="button" id="tervAlap" class="gomb halk">Kézi módosítások törlése</button>
+            </div>
+            <p class="halvany kicsi">
+                A pipával ki-be kapcsolod a hívást és a látogatást. A „nap” és a dátum soronként átírható –
+                a <span class="sajat-pelda">saját érték</span> keretes, a <span class="kesve-pelda">késve</span> dátum piros
+                (az ideális nap elmúlt), a <span class="csuszott-pelda">csúsztatott</span> szaggatott (a napi keret miatt később).
+                Fajonként is állítható a nap a csoport fejlécében.
+            </p>
             <p id="tervOsszegzes" class="halvany kicsi"></p>
             <div class="gorgo"><table id="tervTabla"></table></div>
             <p id="tervTobb" class="halvany kicsi"></p>

@@ -142,6 +142,19 @@ td input.szeles { width: 9rem; }
 .jelveny.mikro { color: var(--halvany); }
 
 .figyelem { color: var(--sarga); font-size: 14px; }
+
+/* Tervező-lista jelölései */
+.jelolo { flex-direction: row !important; align-items: center; gap: 6px; }
+input.sajat, .sajat-pelda { border: 1px solid var(--sarga); border-radius: 7px; padding: 0 4px; }
+input.kesve, .kesve-pelda { color: var(--piros); border-color: var(--piros); }
+input.csuszott, .csuszott-pelda { border-style: dashed; border-color: var(--zold-vilagos); border-width: 1px; border-radius: 7px; padding: 0 4px; }
+.sajat-pelda, .kesve-pelda, .csuszott-pelda { font-size: 12px; }
+td.nap input { width: 4rem; }
+td.datum input { width: 9.5rem; text-align: left; }
+tr.fajsor td { background: rgba(255, 255, 255, .045); }
+tr.fajsor .fajnev { font-weight: 600; }
+tr.ki { opacity: .45; }
+.rang { color: var(--nagyon-halvany); }
 .lablec { max-width: 1400px; margin: 0 auto; padding: 0 16px 32px; }
 
 /* Telefon */
