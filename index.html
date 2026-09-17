@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Értékesítés-elemző</title>
+<meta name="description" content="Értékesítési export elemzése a böngészőben: kimutatás, előrejelzés, vevőelemzés, hívás- és látogatásterv. Az adat nem hagyja el a gépet.">
+<link rel="stylesheet" href="css/stil.css">
+</head>
+<body>
+
+<header class="fejlec">
+    <div class="sav">
+        <div>
+            <h1>Értékesítés-elemző</h1>
+            <p class="halvany">Kimutatás · előrejelzés · vevőelemzés · hívás- és látogatásterv</p>
+        </div>
+        <p class="vedelem">🔒 Az adat <strong>nem hagyja el a gépet</strong>: nincs feltöltés, minden számolás ebben a böngészőben fut.</p>
+    </div>
+</header>
+
+<main>
+    <!-- Betöltés -->
+    <section id="betoltoDoboz" class="kartya betolto">
+        <div id="dobozBetolt" class="dobozterulet">
+            <p class="nagy">Húzd ide az értékesítési exportot, vagy <label for="fajl" class="hivatkozas">válaszd ki</label></p>
+            <input type="file" id="fajl" accept=".csv,.txt,.xlsx,.xls" hidden>
+            <p class="halvany kicsi">
+                Fejléc, amit vár: Üzleti év · Számlázási dátum · Vevőkód · Vevőnév · Megye · Cikkszám · Terméknév ·
+                Cikkcsoport · Értékesített mennyiség · Mértékegység · Nettó árbevétel · Fedezet/árrés Ft · Üzletkötőkód
+            </p>
+            <p class="halvany kicsi">A CSV a legbiztosabb (az Excelből „CSV (pontosvesszővel tagolt)” mentéssel).</p>
+            <div class="gombsor">
+                <button type="button" id="peldaGomb" class="gomb halk">Példaadat betöltése</button>
+                <button type="button" id="torolGomb" class="gomb halk" hidden>Adat törlése</button>
+            </div>
+        </div>
+        <p id="allapot" class="allapot" hidden></p>
+    </section>
+
+    <!-- Szűrők -->
+    <section id="szuroSav" class="kartya szurok" hidden>
+        <label>Üzleti év <select id="fEv"></select></label>
+        <label>Megye <select id="fMegye"></select></label>
+        <label>Üzletkötő <select id="fUzletkoto"></select></label>
+        <label>Cikkcsoport <select id="fCikkcsoport"></select></label>
+        <label class="kereses">Vevő keresése <input type="search" id="fKereses" placeholder="név vagy vevőkód"></label>
+        <button type="button" id="szuroTorol" class="gomb halk">Szűrők törlése</button>
+    </section>
+
+    <!-- Nézetek -->
+    <nav id="fulek" class="fulek" hidden>
+        <button type="button" class="ful aktiv" data-nezet="ertekesites">Értékesítés</button>
+        <button type="button" class="ful" data-nezet="elorejelzes">Vásárlási előrejelzés</button>
+        <button type="button" class="ful" data-nezet="vevok">Vevőelemzés</button>
+        <button type="button" class="ful" data-nezet="tervezo">Hívás- és látogatásterv</button>
+    </nav>
+
+    <section id="nezetErtekesites" class="nezet" hidden>
+        <div id="ertMutatok" class="mutatok"></div>
+        <div class="kartya">
+            <h2>Megye × üzletkötő</h2>
+            <p class="halvany kicsi">Melyik megyében melyik üzletkötő mennyit értékesített.</p>
+            <div class="gorgo"><table id="ertPivot"></table></div>
+        </div>
+        <div class="ketoszlop">
+            <div class="kartya">
+                <h2>Cikkcsoportok</h2>
+                <div class="gorgo"><table id="ertCsoport"></table></div>
+            </div>
+            <div class="kartya">
+                <h2>Üzleti évek</h2>
+                <p class="halvany kicsi">A korábbi évek a cégnek csak egy részét mutatják – ezt a lefedettség mutatja.</p>
+                <div class="gorgo"><table id="ertEv"></table></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="nezetElorejelzes" class="nezet" hidden>
+        <div class="kartya">
+            <h2>Vásárlási előrejelzés · cikkcsoportonként, kg-ban</h2>
+            <p class="halvany kicsi">
+                A következő 12 hónap, az utolsó adatos hónappal záruló év AZONOS naptári hónapja alapján.
+                A vetőmag szezonális, ezért a naptári hónap a helyes bontás – egy éves átlag elmosná a szezont.
+            </p>
+            <label class="beallit">Korrekció
+                <select id="korrekcio">
+                    <option value="-20">−20 %</option>
+                    <option value="-10">−10 %</option>
+                    <option value="0" selected>0 %</option>
+                    <option value="10">+10 %</option>
+                    <option value="20">+20 %</option>
+                    <option value="30">+30 %</option>
+                </select>
+            </label>
+            <p id="eloBazis" class="halvany kicsi"></p>
+            <div class="gorgo"><table id="eloTabla"></table></div>
+        </div>
+    </section>
+
+    <section id="nezetVevok" class="nezet" hidden>
+        <div class="kartya">
+            <h2>Vevőelemzés</h2>
+            <p class="halvany kicsi">Ki mit és mennyit vásárolt, és hol tart a platina szinthez képest.</p>
+            <div class="beallitosor">
+                <label>Besorolás <select id="besorolasSzuro"></select></label>
+                <label>Platina szint (Ft) <input type="number" id="platinaFt" min="0" step="100000"></label>
+                <label>Közel a szinthez (%) <input type="number" id="kozel" min="1" max="100" step="1"></label>
+            </div>
+            <p id="besorolasOsszegzes" class="besorolas-osszegzes"></p>
+            <div class="gorgo"><table id="vevoTabla"></table></div>
+            <p id="vevoTobb" class="halvany kicsi"></p>
+        </div>
+    </section>
+
+    <section id="nezetTervezo" class="nezet" hidden>
+        <div class="kartya">
+            <h2>📈 Bevételi terv → munkaigény</h2>
+            <p class="halvany kicsi">
+                A célösszegből vevőszám lesz, abból pedig látogatás, hívás és árajánlat – méret szerint más úton,
+                <strong>meglévő</strong> és <strong>új</strong> vevőkre külön. Az üresen hagyott mező a bázisból számolt
+                értéket jelenti; az látszik halványan a mezőben.
+            </p>
+            <div class="beallitosor">
+                <label>Cél (Ft) <input type="number" id="celFt" min="0" step="1000000"></label>
+                <label>Időszak <input type="date" id="tervTol"></label>
+                <label>– <input type="date" id="tervIg"></label>
+                <label>Nagy vevő ≥ (Ft) <input type="text" id="miNagyFt" inputmode="numeric"></label>
+                <label>Kicsi vevő &lt; (Ft) <input type="text" id="miKicsiFt" inputmode="numeric"></label>
+            </div>
+            <div class="beallitosor">
+                <label>Naponta eljutni <input type="text" id="miNapiLatPartner" inputmode="numeric"> meglévő +
+                    <input type="text" id="miNapiLatPiaci" inputmode="numeric"> új vevőhöz</label>
+                <label>Naponta felhívni <input type="text" id="miNapiHivPartner" inputmode="numeric"> meglévőt +
+                    <input type="text" id="miNapiHivPiaci" inputmode="numeric"> újat</label>
+                <button type="button" id="miAlap" class="gomb halk">Alaphelyzet</button>
+            </div>
+            <div class="gorgo"><table id="miTabla"></table></div>
+            <p id="miFigyelem" class="figyelem"></p>
+            <p id="miKovetkeztetes"></p>
+        </div>
+
+        <div class="kartya">
+            <h2>Hívás- és látogatásterv</h2>
+            <p class="halvany kicsi">
+                A tavalyi vásárlás évfordulója előtt érdemes megkeresni a vevőt. A 30 napon belüli vásárlások egy
+                alkalomnak számítanak; a forgalom felső részét adó vevőket meg is látogatjuk.
+            </p>
+            <div class="beallitosor">
+                <label>Hívás · nap az évforduló előtt <input type="number" id="hivasNap" min="0" max="180"></label>
+                <label>Látogatás · nap előtte <input type="number" id="latogatasNap" min="0" max="180"></label>
+                <label>Látogatás a forgalom felső %-ára <input type="number" id="pareto" min="10" max="100"></label>
+            </div>
+            <p id="tervOsszegzes" class="halvany kicsi"></p>
+            <div class="gorgo"><table id="tervTabla"></table></div>
+            <p id="tervTobb" class="halvany kicsi"></p>
+        </div>
+    </section>
+</main>
+
+<footer class="lablec">
+    <p class="halvany kicsi">
+        Az adat ezen a gépen marad. A böngésző megjegyzi a betöltött fájlt, hogy ne kelljen újra behúzni –
+        az „Adat törlése” gombbal bármikor kiürítheted.
+    </p>
+</footer>
+
+<script src="js/beolvaso.js"></script>
+<script src="js/elemzes.js"></script>
+<script src="js/munkaigeny.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
