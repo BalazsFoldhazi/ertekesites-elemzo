@@ -72,6 +72,41 @@ igaz('hiányzó oszlopot jelez', B.hianyzoOszlopok(['Üzleti év', 'Megye']).ind
 
 const SOROK = beolvasott.sorok;
 
+// --- piac (belföld / export) -------------------------------------------------
+
+{
+    const fejlec = 'Üzleti év;Számlázási dátum;Vevőnév;Megye;Terméknév;Cikkcsoport;Értékesített mennyiség;Mértékegység;Nettó árbevétel;Pénznemkód;Fedezet/árrés Ft;Üzletkötőkód';
+    const csv = [
+        fejlec,
+        '2025/2026;2026.05.10;Belföldi Kft;BÉKÉS;Lucerna;LUCERNA;100;KG;1 000 000;HUF;100 000;LM',
+        '2025/2026;2026.05.11;Exportos Kft;BÉKÉS;Lucerna;LUCERNA;100;KG;2 000 000;EUR;200 000;LM',
+    ].join('\n');
+    const b = B.csvBol(csv);
+
+    egyenlo('pénznem beolvasva', b.sorok[1].penznem, 'EUR');
+    egyenlo('export szűrő', E.szur(b.sorok, { piac: 'export' }).length, 1);
+    egyenlo('belföld szűrő', E.szur(b.sorok, { piac: 'hazai' }).length, 1);
+    egyenlo('szűrő nélkül mind', E.szur(b.sorok, {}).length, 2);
+    // Az EUR-os számla összege is forintban van – nem váltunk át.
+    egyenlo('az export összege forintban marad', E.ertekesites(E.szur(b.sorok, { piac: 'export' })).ossz.netto, 2000000);
+}
+
+// --- üzleti évek havi lefutása ----------------------------------------------
+
+{
+    const e = E.evHavi(SOROK);
+    egyenlo('két üzleti év', e.evek.join(','), '2024/2025,2025/2026');
+    egyenlo('12 hónap címkéje', e.cimkek.length, 12);
+    // A legkorábbi adat 2025. május, tehát a sor májussal kezdődik.
+    egyenlo('az üzleti év a legkorábbi hónappal indul', e.cimkek[0], 'máj');
+    egyenlo('minden évnek 12 hónapja van', e.adat['2025/2026'].length, 12);
+
+    const osszes = e.evek.reduce(function (a, ev) {
+        return a + e.adat[ev].reduce(function (x, y) { return x + y; }, 0);
+    }, 0);
+    egyenlo('a havi bontás összege a teljes árbevétel', osszes, E.ertekesites(SOROK).ossz.netto);
+}
+
 // --- értékesítés -------------------------------------------------------------
 
 {

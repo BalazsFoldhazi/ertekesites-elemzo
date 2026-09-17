@@ -5,15 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Értékesítés-elemző</title>
 <meta name="description" content="Értékesítési export elemzése a böngészőben: kimutatás, előrejelzés, vevőelemzés, hívás- és látogatásterv. Az adat nem hagyja el a gépet.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/stil.css">
 </head>
 <body>
 
 <header class="fejlec">
     <div class="sav">
-        <div>
-            <h1>Értékesítés-elemző</h1>
-            <p class="halvany">Kimutatás · előrejelzés · vevőelemzés · hívás- és látogatásterv</p>
+        <div class="marka">
+            <svg class="logo" viewBox="0 0 64 64" role="img" aria-label="Logó: kalász">
+                <circle cx="32" cy="32" r="30" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".4"/>
+                <path d="M32 54 V24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                <g fill="currentColor">
+                    <ellipse cx="32" cy="17" rx="4.4" ry="6.6"/>
+                    <ellipse cx="25" cy="26" rx="4.2" ry="6.4" transform="rotate(-34 25 26)"/>
+                    <ellipse cx="39" cy="26" rx="4.2" ry="6.4" transform="rotate(34 39 26)"/>
+                    <ellipse cx="25" cy="36" rx="4.2" ry="6.4" transform="rotate(-34 25 36)"/>
+                    <ellipse cx="39" cy="36" rx="4.2" ry="6.4" transform="rotate(34 39 36)"/>
+                </g>
+            </svg>
+            <div>
+                <h1>Értékesítés-elemző</h1>
+                <p class="halvany">Kimutatás · előrejelzés · vevőelemzés · hívás- és látogatásterv</p>
+            </div>
         </div>
         <p class="vedelem">🔒 Az adat <strong>nem hagyja el a gépet</strong>: nincs feltöltés, minden számolás ebben a böngészőben fut.</p>
     </div>
@@ -21,7 +37,8 @@
 
 <main>
     <!-- Betöltés -->
-    <section id="betoltoDoboz" class="kartya betolto">
+    <details id="betoltoDoboz" class="kartya betolto" open>
+        <summary id="betoltoOsszegzes">Adat betöltése</summary>
         <div id="dobozBetolt" class="dobozterulet">
             <p class="nagy">Húzd ide az értékesítési exportot, vagy <label for="fajl" class="hivatkozas">válaszd ki</label></p>
             <input type="file" id="fajl" accept=".csv,.txt,.xlsx,.xls" hidden>
@@ -36,7 +53,7 @@
             </div>
         </div>
         <p id="allapot" class="allapot" hidden></p>
-    </section>
+    </details>
 
     <!-- Szűrők -->
     <section id="szuroSav" class="kartya szurok" hidden>
@@ -44,6 +61,11 @@
         <label>Megye <select id="fMegye"></select></label>
         <label>Üzletkötő <select id="fUzletkoto"></select></label>
         <label>Cikkcsoport <select id="fCikkcsoport"></select></label>
+        <label>Piac <select id="fPiac">
+            <option value="">mind</option>
+            <option value="hazai">Belföld</option>
+            <option value="export">Export (EUR-számla)</option>
+        </select></label>
         <label class="kereses">Vevő keresése <input type="search" id="fKereses" placeholder="név vagy vevőkód"></label>
         <button type="button" id="szuroTorol" class="gomb halk">Szűrők törlése</button>
     </section>
@@ -58,6 +80,38 @@
 
     <section id="nezetErtekesites" class="nezet" hidden>
         <div id="ertMutatok" class="mutatok"></div>
+
+        <div class="kartya">
+            <h2>Üzleti évek havi lefutása</h2>
+            <p class="halvany kicsi">Az üzleti év hónapjai egymás mellett – így az évek összevethetők.</p>
+            <div class="vaszon hero"><canvas id="cEv"></canvas></div>
+        </div>
+
+        <div class="diagram-sor">
+            <div class="kartya">
+                <h2>Legnagyobb cikkcsoportok</h2>
+                <div class="vaszon"><canvas id="cCsoport"></canvas></div>
+            </div>
+            <div class="kartya">
+                <h2>Megyék részesedése</h2>
+                <div class="vaszon"><canvas id="cMegye"></canvas></div>
+            </div>
+        </div>
+
+        <div class="diagram-sor">
+            <div class="kartya">
+                <h2>Üzletkötők árbevétele</h2>
+                <div class="vaszon"><canvas id="cUk"></canvas></div>
+            </div>
+            <div class="kartya">
+                <h2>Fedezeti hányad cikkcsoportonként</h2>
+                <p class="halvany kicsi">A veszteséges csoport a nulla vonaltól balra áll.</p>
+                <div class="vaszon"><canvas id="cFedezet"></canvas></div>
+            </div>
+        </div>
+
+        <p id="diagramUzenet" class="halvany kicsi"></p>
+
         <div class="kartya">
             <h2>Megye × üzletkötő</h2>
             <p class="halvany kicsi">Melyik megyében melyik üzletkötő mennyit értékesített.</p>
@@ -104,7 +158,11 @@
             <p class="halvany kicsi">Ki mit és mennyit vásárolt, és hol tart a platina szinthez képest.</p>
             <div class="beallitosor">
                 <label>Besorolás <select id="besorolasSzuro"></select></label>
-                <label>Platina szint (Ft) <input type="number" id="platinaFt" min="0" step="100000"></label>
+                <label>Platina szint (Ft) <input type="text" id="platinaFt" inputmode="numeric" class="ft-mezo"></label>
+                <span class="szazalek-gombok">
+                    <button type="button" class="gomb halk" data-platinaszaz="-10">−10%</button>
+                    <button type="button" class="gomb halk" data-platinaszaz="10">+10%</button>
+                </span>
                 <label>Közel a szinthez (%) <input type="number" id="kozel" min="1" max="100" step="1"></label>
             </div>
             <p id="besorolasOsszegzes" class="besorolas-osszegzes"></p>
@@ -122,7 +180,13 @@
                 értéket jelenti; az látszik halványan a mezőben.
             </p>
             <div class="beallitosor">
-                <label>Cél (Ft) <input type="number" id="celFt" min="0" step="1000000"></label>
+                <label>Cél (Ft) <input type="text" id="celFt" inputmode="numeric" class="ft-mezo"></label>
+                <span class="szazalek-gombok">
+                    <button type="button" class="gomb halk" data-celszaz="-10">−10%</button>
+                    <button type="button" class="gomb halk" data-celszaz="-5">−5%</button>
+                    <button type="button" class="gomb halk" data-celszaz="5">+5%</button>
+                    <button type="button" class="gomb halk" data-celszaz="10">+10%</button>
+                </span>
                 <label>Időszak <input type="date" id="tervTol"></label>
                 <label>– <input type="date" id="tervIg"></label>
                 <label>Nagy vevő ≥ (Ft) <input type="text" id="miNagyFt" inputmode="numeric"></label>

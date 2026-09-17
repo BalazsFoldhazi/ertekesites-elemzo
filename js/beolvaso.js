@@ -122,6 +122,9 @@
             osszeg: szam(r.nettoarbevetel),
             fedezet: szam(r.fedezetarresft),
             uzletkoto: rovid(r.uzletkotokod, 30),
+            // A pénznemkód CSAK azt jelöli, hogy exportszámla: az árbevétel és a
+            // fedezet ezeknél is forintban áll, tehát nem kell átváltani.
+            penznem: rovid(r.penznemkod, 10),
         };
     }
 

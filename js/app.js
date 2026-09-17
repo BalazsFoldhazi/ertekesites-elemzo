@@ -16,7 +16,7 @@
     var A = {
         sorok: [],
         forras: '',
-        szuro: { ev: '', megye: '', uzletkoto: '', cikkcsoport: '', q: '' },
+        szuro: { ev: '', megye: '', uzletkoto: '', cikkcsoport: '', piac: '', q: '' },
         nezet: 'ertekesites',
         korrekcio: 0,
         besorolas: { platinaFt: 5000000, kozel: 70, szuro: '' },
@@ -126,6 +126,21 @@
         A.forras = forras;
         ment();
         indul();
+        // Ha van adat, a betöltő összecsukódik – egy kattintással kinyitható.
+        $('betoltoDoboz').open = !sorok.length;
+    }
+
+    /** A becsukott betöltő fejléce: mi van betöltve. */
+    function betoltoFejlec() {
+        var s = $('betoltoOsszegzes');
+        if (!A.sorok.length) {
+            s.textContent = 'Adat betöltése';
+            return;
+        }
+        s.textContent = '';
+        s.append(el('strong', '', szam(A.sorok.length) + ' sor'));
+        s.append(document.createTextNode(
+            (A.forras ? ' · ' + A.forras : '') + ' — kattints ide másik fájl betöltéséhez'));
     }
 
     function ment() {
@@ -296,6 +311,7 @@
         legordulo($('fMegye'), v.megyek, A.szuro.megye);
         legordulo($('fUzletkoto'), v.uzletkotok, A.szuro.uzletkoto);
         legordulo($('fCikkcsoport'), v.cikkcsoportok, A.szuro.cikkcsoport);
+        $('fPiac').value = A.szuro.piac;
         $('fKereses').value = A.szuro.q;
     }
 
@@ -303,22 +319,161 @@
 
     // --- 1. Értékesítés ----------------------------------------------------
 
+    var diagramok = {};
+    var RACS = 'rgba(255, 255, 255, .07)';
+    var SZIN = ['#3fa76a', '#7bc99a', '#d9a441', '#6ba3d6', '#c98b7b', '#9c8bd6', '#4fb8a8', '#d67ba3'];
+
+    /** A diagram-könyvtárat csak akkor töltjük le, amikor tényleg kell. */
+    function chartKesz(kesz) {
+        if (window.Chart) { kesz(); return; }
+
+        chartKesz.varo = chartKesz.varo || [];
+        chartKesz.varo.push(kesz);
+        if (chartKesz.tolt) return;
+        chartKesz.tolt = true;
+
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1';
+        s.onload = function () { chartKesz.varo.forEach(function (f) { f(); }); chartKesz.varo = []; };
+        s.onerror = function () {
+            $('diagramUzenet').textContent = 'A diagramok könyvtára nem töltődött be (nincs internet?) – '
+                + 'a mutatók és a táblázatok ettől még működnek.';
+        };
+        document.head.appendChild(s);
+    }
+
+    function ujDiagram(id, cfg) {
+        if (diagramok[id]) diagramok[id].destroy();
+        var v = document.getElementById(id);
+        if (!v) return;
+        diagramok[id] = new window.Chart(v.getContext('2d'), cfg);
+    }
+
+    /** Vízszintes oszlopdiagram – a hosszú nevek így olvashatók. */
+    function oszlop(id, cimkek, ertekek, egyseg, szinFuggveny) {
+        ujDiagram(id, {
+            type: 'bar',
+            data: {
+                labels: cimkek,
+                datasets: [{
+                    data: ertekek,
+                    backgroundColor: ertekek.map(szinFuggveny || function () { return SZIN[0]; }),
+                    borderWidth: 0,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function (c) { return szam(c.parsed.x, egyseg === '%' ? 1 : 1) + ' ' + egyseg; },
+                        },
+                    },
+                },
+                scales: {
+                    x: { grid: { color: RACS }, ticks: { callback: function (v) { return szam(v, 0) + ' ' + egyseg; } } },
+                    y: { grid: { display: false } },
+                },
+            },
+        });
+    }
+
+    function rajzolDiagramok(sorok, e) {
+        chartKesz(function () {
+            var C = window.Chart;
+            C.defaults.font.family = getComputedStyle(document.body).fontFamily;
+            C.defaults.font.size = 11.5;
+            C.defaults.color = 'rgba(233, 240, 232, .62)';
+            C.defaults.animation = false;
+            C.defaults.maintainAspectRatio = false;
+            C.defaults.responsive = true;
+
+            // 1) Üzleti évek havi lefutása
+            var h = E.evHavi(sorok);
+            ujDiagram('cEv', {
+                type: 'line',
+                data: {
+                    labels: h.cimkek,
+                    datasets: h.evek.map(function (ev, i) {
+                        return {
+                            label: ev,
+                            data: h.adat[ev].map(function (v) { return Math.round(v / 1e6 * 10) / 10; }),
+                            borderColor: SZIN[i % SZIN.length],
+                            backgroundColor: SZIN[i % SZIN.length],
+                            borderWidth: 2, tension: .3, pointRadius: 2,
+                        };
+                    }),
+                },
+                options: {
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, usePointStyle: true } },
+                        tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + szam(c.parsed.y, 1) + ' M Ft'; } } },
+                    },
+                    scales: {
+                        y: { grid: { color: RACS }, ticks: { callback: function (v) { return szam(v, 0) + ' M'; } } },
+                        x: { grid: { display: false } },
+                    },
+                },
+            });
+
+            // 2) Legnagyobb cikkcsoportok
+            var cs = e.csoportok.slice(0, 12);
+            oszlop('cCsoport', cs.map(function (x) { return x.csoport; }),
+                cs.map(function (x) { return Math.round(x.netto / 1e6 * 10) / 10; }), 'M Ft');
+
+            // 3) Megyék részesedése
+            var m = e.megyek.slice(0, 8);
+            var egyeb = e.megyek.slice(8).reduce(function (a, x) { return a + x.netto; }, 0);
+            var mCimkek = m.map(function (x) { return x.megye; });
+            var mErtekek = m.map(function (x) { return Math.round(x.netto / 1e6 * 10) / 10; });
+            if (egyeb > 0) { mCimkek.push('egyéb'); mErtekek.push(Math.round(egyeb / 1e6 * 10) / 10); }
+            ujDiagram('cMegye', {
+                type: 'doughnut',
+                data: { labels: mCimkek, datasets: [{ data: mErtekek, backgroundColor: SZIN, borderWidth: 0 }] },
+                options: {
+                    cutout: '52%',
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, usePointStyle: true } },
+                        tooltip: { callbacks: { label: function (c) { return c.label + ': ' + szam(c.parsed, 1) + ' M Ft'; } } },
+                    },
+                },
+            });
+
+            // 4) Üzletkötők árbevétele
+            var uk = e.uzletkotok.slice(0, 12);
+            oszlop('cUk', uk.map(function (x) { return x.uzletkoto; }),
+                uk.map(function (x) { return Math.round(x.netto / 1e6 * 10) / 10; }), 'M Ft');
+
+            // 5) Fedezeti hányad cikkcsoportonként – a veszteséges balra áll.
+            var fh = e.csoportok.slice(0, 12).map(function (x) {
+                return { csoport: x.csoport, mp: x.netto !== 0 ? x.fedezet / x.netto * 100 : 0 };
+            }).sort(function (a, b) { return b.mp - a.mp; });
+            oszlop('cFedezet', fh.map(function (x) { return x.csoport; }),
+                fh.map(function (x) { return Math.round(x.mp * 10) / 10; }), '%',
+                function (v) { return v < 0 ? '#d98080' : SZIN[0]; });
+        });
+    }
+
     function rajzolErtekesites(sorok) {
         var e = E.ertekesites(sorok);
+        var hanyad = e.ossz.netto !== 0 ? e.ossz.fedezet / e.ossz.netto * 100 : 0;
 
         var mutatok = $('ertMutatok');
         mutatok.textContent = '';
         [
-            ['Sorok', szam(e.ossz.sor)],
-            ['Vevők', szam(e.ossz.vevo)],
-            ['Nettó árbevétel', szam(e.ossz.netto / 1e6, 1) + ' M Ft'],
-            ['Fedezet', szam(e.ossz.fedezet / 1e6, 1) + ' M Ft'],
-            ['Mennyiség (kg-os sorok)', szam(e.ossz.kg) + ' kg'],
+            ['Nettó árbevétel', szam(e.ossz.netto / 1e6, 1) + ' M Ft', szam(e.ossz.sor) + ' számlatétel'],
+            ['Fedezet', szam(e.ossz.fedezet / 1e6, 1) + ' M Ft', 'árrés forintban'],
+            ['Fedezeti hányad', szam(hanyad, 1) + ' %', 'a nettó árbevételre vetítve'],
+            ['Értékesített mennyiség', szam(e.ossz.kg) + ' kg', 'csak a kilóban mért tételek'],
+            ['Vásárló vevő', szam(e.ossz.vevo), 'a szűrt időszakban'],
         ].forEach(function (m) {
             var d = el('div', 'mutato');
-            d.append(el('div', 'cimke', m[0]), el('div', 'ertek', m[1]));
+            d.append(el('div', 'cimke', m[0]), el('div', 'ertek', m[1]), el('div', 'alcim', m[2]));
             mutatok.append(d);
         });
+
+        rajzolDiagramok(sorok, e);
 
         var ukNevek = e.uzletkotok.map(function (u) { return u.uzletkoto; });
         var fejlec = ['Megye'].concat(ukNevek.map(function (u) { return { szoveg: u, szam: true }; }))
@@ -401,7 +556,7 @@
     };
 
     function rajzolVevok(sorok) {
-        $('platinaFt').value = A.besorolas.platinaFt;
+        if ($('platinaFt') !== document.activeElement) $('platinaFt').value = szam(A.besorolas.platinaFt);
         $('kozel').value = A.besorolas.kozel;
 
         var bes = E.besorolas(A.sorok, A.szuro, A.besorolas);
@@ -506,6 +661,8 @@
         var adat = E.munkaigenyAdat(sorok, terv, tervEredmeny, maStr());
         var e = M.szamol(adat, A.mi);
         var T = e.beallitas;
+
+        if ($('celFt') !== document.activeElement) $('celFt').value = szam(A.terv.cel);
 
         $('miNagyFt').value = szam(T.hatarok.nagyFt);
         $('miKicsiFt').value = szam(T.hatarok.kicsiFt);
@@ -1091,6 +1248,7 @@
 
     function indul() {
         var van = A.sorok.length > 0;
+        betoltoFejlec();
         $('szuroSav').hidden = !van;
         $('fulek').hidden = !van;
         $('torolGomb').hidden = !van;
@@ -1099,7 +1257,7 @@
             return;
         }
         szurokFeltolt();
-        $('celFt').value = A.terv.cel;
+        $('celFt').value = szam(A.terv.cel);
         $('tervTol').value = A.terv.tol;
         $('tervIg').value = A.terv.ig;
         rajzol();
@@ -1134,12 +1292,13 @@
             g.addEventListener('click', function () { A.nezet = g.dataset.nezet; ment(); rajzol(); });
         });
 
-        [['fEv', 'ev'], ['fMegye', 'megye'], ['fUzletkoto', 'uzletkoto'], ['fCikkcsoport', 'cikkcsoport']].forEach(function (p) {
+        [['fEv', 'ev'], ['fMegye', 'megye'], ['fUzletkoto', 'uzletkoto'], ['fCikkcsoport', 'cikkcsoport'],
+            ['fPiac', 'piac']].forEach(function (p) {
             $(p[0]).addEventListener('change', function () { A.szuro[p[1]] = this.value; ment(); rajzol(); });
         });
         $('fKereses').addEventListener('input', function () { A.szuro.q = this.value; ment(); rajzol(); });
         $('szuroTorol').addEventListener('click', function () {
-            A.szuro = { ev: '', megye: '', uzletkoto: '', cikkcsoport: '', q: '' };
+            A.szuro = { ev: '', megye: '', uzletkoto: '', cikkcsoport: '', piac: '', q: '' };
             ment();
             szurokFeltolt();
             rajzol();
@@ -1147,9 +1306,23 @@
 
         $('korrekcio').addEventListener('change', function () { A.korrekcio = Number(this.value) || 0; ment(); rajzol(); });
 
-        ['platinaFt', 'kozel'].forEach(function (k) {
-            $(k).addEventListener('input', function () {
-                A.besorolas[k] = Number(this.value) || 0;
+        // A Ft-mező tagolt (300 000 000), ezért nem minden leütésre számolunk:
+        // különben újraformázás közben elugrana a kurzor.
+        $('platinaFt').addEventListener('change', function () {
+            A.besorolas.platinaFt = szamBe(this.value) || 0;
+            ment();
+            rajzolVevok(szurt());
+        });
+        $('kozel').addEventListener('input', function () {
+            A.besorolas.kozel = Number(this.value) || 0;
+            ment();
+            rajzolVevok(szurt());
+        });
+
+        document.querySelectorAll('[data-platinaszaz]').forEach(function (g) {
+            g.addEventListener('click', function () {
+                var p = Number(g.dataset.platinaszaz) || 0;
+                A.besorolas.platinaFt = Math.max(0, Math.round(A.besorolas.platinaFt * (1 + p / 100)));
                 ment();
                 rajzolVevok(szurt());
             });
@@ -1242,7 +1415,17 @@
             });
         });
 
-        $('celFt').addEventListener('input', function () { A.terv.cel = Number(this.value) || 0; ment(); rajzolMunkaigeny(); });
+        $('celFt').addEventListener('change', function () { A.terv.cel = szamBe(this.value) || 0; ment(); rajzolMunkaigeny(); });
+
+        // ± százalék: a célt egy kattintással feljebb-lejjebb lehet vinni.
+        document.querySelectorAll('[data-celszaz]').forEach(function (g) {
+            g.addEventListener('click', function () {
+                var p = Number(g.dataset.celszaz) || 0;
+                A.terv.cel = Math.max(0, Math.round(A.terv.cel * (1 + p / 100)));
+                ment();
+                rajzolMunkaigeny();
+            });
+        });
         $('tervTol').addEventListener('change', function () { A.terv.tol = this.value; ment(); rajzolMunkaigeny(); });
         $('tervIg').addEventListener('change', function () { A.terv.ig = this.value; ment(); rajzolMunkaigeny(); });
 

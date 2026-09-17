@@ -33,6 +33,9 @@
             if (sz.megye && s.megye !== sz.megye) return false;
             if (sz.uzletkoto && s.uzletkoto !== sz.uzletkoto) return false;
             if (sz.cikkcsoport && csoportNev(s) !== sz.cikkcsoport) return false;
+            // Piac: az EUR-os számla az exportot jelöli (az összeg forintban van).
+            if (sz.piac === 'export' && String(s.penznem || '').toUpperCase() !== 'EUR') return false;
+            if (sz.piac === 'hazai' && String(s.penznem || '').toUpperCase() === 'EUR') return false;
             if (q) {
                 var nev = String(s.vevo || '').toLowerCase();
                 var kod = String(s.vevo_kod || '').toLowerCase();
@@ -113,6 +116,38 @@
                 return { ev: e.ev, netto: e.netto, kg: e.kg, vevo: Object.keys(e.vevo).length, uzletkoto: Object.keys(e.uzletkoto).length };
             }),
         };
+    }
+
+    var HONAP_ROVID = ['jan', 'feb', 'márc', 'ápr', 'máj', 'jún', 'júl', 'aug', 'szept', 'okt', 'nov', 'dec'];
+
+    /**
+     * Üzleti évek havi lefutása: minden üzleti év 12 hónapja egymás mellett.
+     *
+     * Az üzleti év nem januárban kezdődik, ezért a hónapokat a LEGKORÁBBI adat
+     * hónapjától sorolom – így a görbék fedik egymást, és összevethetők.
+     */
+    function evHavi(sorok) {
+        var legkorabbi = null;
+        (sorok || []).forEach(function (s) {
+            if (s.datum && (legkorabbi === null || s.datum < legkorabbi)) legkorabbi = s.datum;
+        });
+        if (legkorabbi === null) return { evek: [], adat: {}, cimkek: [], kezdoHonap: 1 };
+
+        var kezdo = Number(legkorabbi.slice(5, 7));
+        var adat = {};
+
+        (sorok || []).forEach(function (s) {
+            if (!s.datum || ures(s.uzleti_ev)) return;
+            var ho = Number(s.datum.slice(5, 7));
+            var i = (ho - kezdo + 12) % 12;
+            adat[s.uzleti_ev] = adat[s.uzleti_ev] || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            adat[s.uzleti_ev][i] += ft(s);
+        });
+
+        var cimkek = [];
+        for (var j = 0; j < 12; j++) cimkek.push(HONAP_ROVID[(kezdo - 1 + j) % 12]);
+
+        return { evek: Object.keys(adat).sort(), adat: adat, cimkek: cimkek, kezdoHonap: kezdo };
     }
 
     /** Vevőnként: forgalom, fedezet, alkalmak, első/utolsó vásárlás, cikkcsoportok. */
@@ -766,6 +801,7 @@
         szur: szur,
         valaszthato: valaszthato,
         ertekesites: ertekesites,
+        evHavi: evHavi,
         vevok: vevok,
         besorolas: besorolas,
         elorejelzes: elorejelzes,

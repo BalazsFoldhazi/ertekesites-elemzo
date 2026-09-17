@@ -39,7 +39,12 @@ nélkül is megy. Az XLSX olvasásához a lap egy külső könyvtárat tölt le.
 
 ## A négy nézet
 
-- **Értékesítés** — megye × üzletkötő kimutatás, cikkcsoportok, üzleti évek lefedettsége.
+- **Értékesítés** — öt mutató (nettó árbevétel, fedezet, fedezeti hányad, értékesített
+  mennyiség, vásárló vevő) és öt diagram: üzleti évek havi lefutása, legnagyobb
+  cikkcsoportok, megyék részesedése, üzletkötők árbevétele, fedezeti hányad
+  cikkcsoportonként. Alatta megye × üzletkötő kimutatás, cikkcsoportok és az üzleti évek
+  lefedettsége. A **Piac** szűrővel belföldre vagy exportra (EUR-számla) szűkíthető — az
+  összeg ott is forintban van, átváltás nélkül.
 - **Vásárlási előrejelzés** — cikkcsoportonként, kg-ban, a következő 12 hónapra. A bázis az
   utolsó adatos hónappal záruló év *azonos naptári hónapja*: a vetőmag szezonális, egy
   éves átlag elmosná a szezont. Kézi korrekció ±.
