@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // A telepitett valtozat neve – ebbol lesz a cim is:
+  // https://ertekesitesitervezo.<fiok>.workers.dev
+  "name": "ertekesitesitervezo",
+  "compatibility_date": "2026-09-17",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "."
+  }
+}
