@@ -143,6 +143,35 @@ td input.szeles { width: 9rem; }
 
 .figyelem { color: var(--sarga); font-size: 14px; }
 
+/* Nézetváltó és naptár */
+.nezetvalto { display: flex; gap: 6px; }
+.ful.kicsi-ful { padding: 5px 14px; font-size: 13px; }
+.naptar-lep { display: flex; align-items: center; gap: 8px; }
+.naptar-lep .gomb { padding: 4px 10px; }
+
+.naptar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.naptar .fejnap { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--nagyon-halvany); padding: 2px 4px; }
+.naptar .nap {
+    border: 1px solid var(--keret); border-radius: 10px;
+    padding: 6px; min-height: 96px; background: rgba(255, 255, 255, .015);
+}
+.naptar .nap.mas-honap { opacity: .35; }
+.naptar .nap.hetvege { background: transparent; }
+.naptar .nap.ma { border-color: var(--zold); }
+.naptar .nap.tulcsordul { border-color: var(--sarga); }
+.naptar .nap .fej { display: flex; justify-content: space-between; font-size: 12px; color: var(--halvany); margin-bottom: 4px; }
+.naptar .tetel {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 12px; line-height: 1.3; margin-bottom: 3px;
+}
+.naptar .tetel .nev { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.naptar .tetel button {
+    background: transparent; border: 1px solid var(--keret); color: var(--halvany);
+    border-radius: 5px; font-size: 10px; line-height: 1; padding: 2px 4px; cursor: pointer;
+}
+.naptar .tetel button:hover { color: var(--szoveg); border-color: var(--zold); }
+.naptar .tobb { font-size: 11px; color: var(--nagyon-halvany); }
+
 /* Tervező-lista jelölései */
 .jelolo { flex-direction: row !important; align-items: center; gap: 6px; }
 input.sajat, .sajat-pelda { border: 1px solid var(--sarga); border-radius: 7px; padding: 0 4px; }

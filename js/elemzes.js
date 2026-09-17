@@ -522,6 +522,77 @@
             .sort(function (a, b) { return b.ft - a.ft; });
     }
 
+    /** Helyi nap szerinti 'ÉÉÉÉ-HH-NN' (a naptár napjaihoz). */
+    function ymd(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    /**
+     * Naptár-adat: melyik napra melyik hívás és látogatás esik.
+     *
+     * Csak a bekapcsolt tételek kerülnek bele – amit a listán kivettél, az a
+     * naptárban sem foglal helyet.
+     */
+    function naptarAdat(lista) {
+        var napok = {};
+        var tesz = function (kulcs, mit, s) {
+            napok[kulcs] = napok[kulcs] || { hivas: [], latogatas: [] };
+            napok[kulcs][mit].push(s);
+        };
+
+        (lista || []).forEach(function (s) {
+            if (s.hivasBe && s.hivasDatum) tesz(ymd(s.hivasDatum), 'hivas', s);
+            if (s.latogatasBe && s.latogatasDatum) tesz(ymd(s.latogatasDatum), 'latogatas', s);
+        });
+
+        var honapok = {};
+        Object.keys(napok).forEach(function (k) { honapok[k.slice(0, 7)] = true; });
+
+        return { napok: napok, honapok: Object.keys(honapok).sort() };
+    }
+
+    /**
+     * Éves nézet: a munka szezonalitása – cikkcsoportonként, hónapról hónapra
+     * hány hívás és látogatás esik. Így látszik, mikor jön a dömping.
+     */
+    function evesAdat(lista) {
+        var honapok = {};
+        var gy = {};
+
+        var tesz = function (s, d, mit) {
+            var h = ymd(d).slice(0, 7);
+            honapok[h] = true;
+            gy[s.faj] = gy[s.faj] || { faj: s.faj, honapok: {}, ossz: { hivas: 0, latogatas: 0 } };
+            gy[s.faj].honapok[h] = gy[s.faj].honapok[h] || { hivas: 0, latogatas: 0 };
+            gy[s.faj].honapok[h][mit]++;
+            gy[s.faj].ossz[mit]++;
+        };
+
+        (lista || []).forEach(function (s) {
+            if (s.hivasBe && s.hivasDatum) tesz(s, s.hivasDatum, 'hivas');
+            if (s.latogatasBe && s.latogatasDatum) tesz(s, s.latogatasDatum, 'latogatas');
+        });
+
+        var honapLista = Object.keys(honapok).sort();
+        var ossz = {};
+        honapLista.forEach(function (h) { ossz[h] = { hivas: 0, latogatas: 0 }; });
+
+        var sorok = Object.keys(gy).map(function (k) { return gy[k]; });
+        sorok.forEach(function (sor) {
+            honapLista.forEach(function (h) {
+                var c = sor.honapok[h];
+                if (!c) return;
+                ossz[h].hivas += c.hivas;
+                ossz[h].latogatas += c.latogatas;
+            });
+        });
+        sorok.sort(function (a, b) {
+            return (b.ossz.hivas + b.ossz.latogatas) - (a.ossz.hivas + a.ossz.latogatas);
+        });
+
+        return { honapok: honapLista, sorok: sorok, ossz: ossz };
+    }
+
     /** A munkaigény-motor bemenete: a bázis vevői és ami már a listán van. */
     function munkaigenyAdat(sorok, terv, tervezoEredmeny, ma) {
         var v = vevok(sorok).map(function (x) { return { nev: x.vevo, ft: x.netto }; });
@@ -550,6 +621,8 @@
         tervezo: tervezo,
         idozit: idozit,
         csoportosit: csoportosit,
+        naptarAdat: naptarAdat,
+        evesAdat: evesAdat,
         munkaigenyAdat: munkaigenyAdat,
         ALKALOM_RES: ALKALOM_RES,
     };

@@ -238,6 +238,38 @@ const SOROK = beolvasott.sorok;
     egyenlo('minden sor bekerül valamelyik csoportba', ossz, E.idozit(t, {}, {}, {}, '2026-09-17').length);
 }
 
+// --- naptár és éves nézet ----------------------------------------------------
+
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const lista = E.idozit(t, {}, {}, {}, '2026-09-17');
+
+    const naptar = E.naptarAdat(lista);
+    const napokDb = Object.keys(naptar.napok).reduce(function (a, k) {
+        return a + naptar.napok[k].hivas.length + naptar.napok[k].latogatas.length;
+    }, 0);
+    const varhato = lista.filter(function (s) { return s.hivasBe; }).length
+        + lista.filter(function (s) { return s.latogatasBe; }).length;
+    egyenlo('minden bekapcsolt tétel bekerül a naptárba', napokDb, varhato);
+    igaz('a hónapok rendezve jönnek', naptar.honapok.join(',') === naptar.honapok.slice().sort().join(','));
+
+    // A kikapcsolt tétel a naptárban sem foglal helyet.
+    const egy = {};
+    egy[lista[0].kulcs] = { hivasBe: false, latogatasBe: false };
+    const szukitett = E.naptarAdat(E.idozit(t, {}, {}, egy, '2026-09-17'));
+    const ujDb = Object.keys(szukitett.napok).reduce(function (a, k) {
+        return a + szukitett.napok[k].hivas.length + szukitett.napok[k].latogatas.length;
+    }, 0);
+    igaz('a kikapcsolt tétel kimarad a naptárból', ujDb < napokDb);
+
+    const eves = E.evesAdat(lista);
+    igaz('van éves sor', eves.sorok.length > 0);
+    const evesDb = eves.honapok.reduce(function (a, h) { return a + eves.ossz[h].hivas + eves.ossz[h].latogatas; }, 0);
+    egyenlo('az éves nézet ugyanannyi tételt számol', evesDb, varhato);
+    const soroszzeg = eves.sorok.reduce(function (a, s) { return a + s.ossz.hivas + s.ossz.latogatas; }, 0);
+    egyenlo('a sorok összege megegyezik a havi összeggel', soroszzeg, evesDb);
+}
+
 // --- munkaigény (a lapon használt bemenettel) --------------------------------
 
 {

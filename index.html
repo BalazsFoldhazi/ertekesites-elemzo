@@ -165,9 +165,32 @@
                 (az ideális nap elmúlt), a <span class="csuszott-pelda">csúsztatott</span> szaggatott (a napi keret miatt később).
                 Fajonként is állítható a nap a csoport fejlécében.
             </p>
+            <div class="beallitosor">
+                <div class="nezetvalto">
+                    <button type="button" class="ful kicsi-ful aktiv" data-tervnezet="lista">Lista</button>
+                    <button type="button" class="ful kicsi-ful" data-tervnezet="naptar">Naptár</button>
+                    <button type="button" class="ful kicsi-ful" data-tervnezet="eves">Éves</button>
+                </div>
+                <span id="naptarLep" class="naptar-lep" hidden>
+                    <button type="button" class="gomb halk" id="naptarElozo">◀</button>
+                    <strong id="naptarCim"></strong>
+                    <button type="button" class="gomb halk" id="naptarKovetkezo">▶</button>
+                </span>
+            </div>
+
             <p id="tervOsszegzes" class="halvany kicsi"></p>
-            <div class="gorgo"><table id="tervTabla"></table></div>
-            <p id="tervTobb" class="halvany kicsi"></p>
+            <div id="tervLista">
+                <div class="gorgo"><table id="tervTabla"></table></div>
+                <p id="tervTobb" class="halvany kicsi"></p>
+            </div>
+            <div id="tervNaptar" hidden>
+                <p class="halvany kicsi">A nyilakkal a tétel egy nappal arrébb tehető; a napi keret fölötti nap sárga.</p>
+                <div id="naptarRacs" class="naptar"></div>
+            </div>
+            <div id="tervEves" hidden>
+                <p class="halvany kicsi">Cikkcsoportonként, hónapról hónapra: 📞 hívás · 🚗 látogatás. Így látszik, mikor jön a dömping.</p>
+                <div class="gorgo"><table id="evesTabla"></table></div>
+            </div>
         </div>
     </section>
 </main>
