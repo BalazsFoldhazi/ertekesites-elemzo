@@ -1,0 +1,16 @@
+# Ami NEM való a kitett oldalra.
+#
+# A .git mappa kulonosen fontos: nelkule a teljes verziotortenet letoltheto
+# lenne a lapról (a .git/config es a tobbi fajl kiszolgalodik).
+
+.git
+.git/**
+.gitignore
+.assetsignore
+.nojekyll
+wrangler.jsonc
+README.md
+tests
+tests/**
+node_modules
+node_modules/**
