@@ -31,6 +31,13 @@
         tervCsoportosit: true,
         tervNezet: 'lista',
         naptarHonap: null,
+        // Értékesítési terv (terméktervező): bázis és a ráhangolt százalékok.
+        tervTerv: {
+            bazisEv: '', bazisTol: 1, bazisIg: 12,
+            mennySzaz: 0, arSzaz: 0,
+            tetelek: {}, csoportok: {},
+            csakFajok: false, beemelve: false,
+        },
         // Éves rács: sorok, kártyák és az egyszerre látszó hónapok száma.
         evesSorMod: 'megye',
         evesKartya: 'faj',
@@ -159,6 +166,7 @@
                 tervCsoport: A.tervCsoport, tervEgyeni: A.tervEgyeni, tervSzuro: A.tervSzuro,
                 tervCsoportosit: A.tervCsoportosit, tervNezet: A.tervNezet, naptarHonap: A.naptarHonap,
                 evesSorMod: A.evesSorMod, evesKartya: A.evesKartya, evesHonapDb: A.evesHonapDb, evesTol: A.evesTol,
+                tervTerv: A.tervTerv,
                 nezet: A.nezet, megyeNap: A.megyeNap, feltoltes: A.feltoltes, jeloltek: A.jeloltek,
             }));
         } catch (e) {
@@ -173,7 +181,7 @@
             A.sorok = t.sorok;
             A.forras = t.forras || '';
             ['szuro', 'besorolas', 'terv', 'tervB', 'mi', 'tervCsoport', 'tervEgyeni', 'tervSzuro',
-                'megyeNap', 'feltoltes', 'dontes'].forEach(function (k) {
+                'megyeNap', 'feltoltes', 'dontes', 'tervTerv'].forEach(function (k) {
                 if (t[k] && typeof t[k] === 'object') A[k] = Object.assign(A[k], t[k]);
             });
             if (Array.isArray(t.jeloltek)) A.jeloltek = t.jeloltek;
@@ -1331,11 +1339,195 @@
             : '';
     }
 
+    // --- 5. Értékesítési terv (terméktervező) ------------------------------
+
+    /** A bázis sorai: a kiválasztott üzleti év megadott hónapjai. */
+    function tervBazisSorok() {
+        var t = A.tervTerv;
+        return adatSorok().filter(function (s) {
+            if (t.bazisEv && s.uzleti_ev !== t.bazisEv) return false;
+            if (!s.datum) return false;
+            var ho = Number(s.datum.slice(5, 7));
+            return ho >= t.bazisTol && ho <= t.bazisIg;
+        });
+    }
+
+    /** Százalék-mező: a beírt érték azonnal újraszámol. */
+    function szazMezo(ertek, beallit) {
+        var i = el('input');
+        i.type = 'text';
+        i.inputMode = 'decimal';
+        i.style.width = '5rem';
+        i.value = szam(ertek, 1);
+        i.addEventListener('change', function () {
+            beallit(this.value.trim() === '' ? null : szamBe(this.value));
+            ment();
+            rajzolTermekTerv();
+        });
+        return i;
+    }
+
+    function rajzolTermekTerv() {
+        var t = A.tervTerv;
+        var evek = E.valaszthato(adatSorok()).evek;
+
+        // Üzleti év: alapból a legutolsó.
+        if (!t.bazisEv && evek.length) t.bazisEv = evek[evek.length - 1];
+        var evMezo = $('tervBazisEv');
+        evMezo.textContent = '';
+        evek.forEach(function (e) { evMezo.append(new Option(e, e)); });
+        evMezo.value = t.bazisEv;
+
+        [['tervBazisTol', 'bazisTol'], ['tervBazisIg', 'bazisIg']].forEach(function (p) {
+            var m = $(p[0]);
+            m.textContent = '';
+            HONAPNEV.forEach(function (nev, i) { m.append(new Option(nev, String(i + 1))); });
+            m.value = String(t[p[1]]);
+        });
+
+        $('tervVezerlok').hidden = !t.beemelve;
+
+        if (!t.beemelve) {
+            $('tervMutatok').textContent = '';
+            $('tervTermekUres').textContent = 'Válaszd ki a bázis időszakát, és nyomd meg a „Bázis beemelése" gombot.';
+            return;
+        }
+
+        var bazis = tervBazisSorok();
+        if (!bazis.length) {
+            $('tervMutatok').textContent = '';
+            $('tervTermekTabla').textContent = '';
+            $('tervTermekUres').textContent = 'Ebben az időszakban nincs eladás – válassz másik üzleti évet vagy hónapokat.';
+            return;
+        }
+        $('tervTermekUres').textContent = '';
+
+        var r = E.termekTerv(bazis, t);
+        var o = r.ossz;
+
+        $('tervMennySzaz').value = szam(t.mennySzaz, 1);
+        $('tervArSzaz').value = szam(t.arSzaz, 1);
+
+        var mutatok = $('tervMutatok');
+        mutatok.textContent = '';
+        [
+            ['Bázis · ' + t.bazisEv, szam(o.bazisFt / 1e6, 1) + ' M Ft', szam(o.bazisKg) + ' kg'],
+            ['Terv', szam(o.tervFt / 1e6, 1) + ' M Ft', szam(Math.round(o.tervKg)) + ' kg'],
+            ['Változás', (o.valtozasFt >= 0 ? '+' : '') + szam(o.valtozasFt / 1e6, 1) + ' M Ft',
+                (o.valtozasSzaz >= 0 ? '+' : '') + szam(o.valtozasSzaz, 1) + '% · mennyiség '
+                + (o.mennySzaz >= 0 ? '+' : '') + szam(o.mennySzaz, 1) + '%'],
+            ['Tételek', szam(o.db), r.csoportok.length + ' cikkcsoport'],
+        ].forEach(function (m) {
+            var d = el('div', 'mutato');
+            d.append(el('div', 'cimke', m[0]), el('div', 'ertek', m[1]), el('div', 'alcim', m[2]));
+            mutatok.append(d);
+        });
+
+        // Tábla
+        var tb = $('tervTermekTabla');
+        tb.textContent = '';
+
+        var thead = el('thead');
+        var fejsor = el('tr');
+        ['Termék', { s: 'Bázis' }, { s: 'Bázis Ft' }, { s: 'Terv' }, { s: '±%' }, { s: 'Terv Ft' }]
+            .forEach(function (c) {
+                var szoveg = typeof c === 'string' ? c : c.s;
+                fejsor.append(el('th', typeof c === 'object' ? 'szam' : '', szoveg));
+            });
+        thead.append(fejsor);
+
+        var tbody = el('tbody');
+        var ertek = function (v, alcim) {
+            var td = el('td', 'szam');
+            td.append(el('span', '', v));
+            if (alcim) td.append(el('span', 'alcim', alcim));
+            return td;
+        };
+
+        r.csoportok.forEach(function (cs) {
+            var sz = evesSzin(cs.faj);
+            var tr = el('tr', 'fajsor');
+
+            var nev = el('td');
+            var pont = el('span', '', '● ');
+            pont.style.color = sz.keret;
+            nev.append(pont, el('b', '', cs.faj), el('span', 'alcim', cs.db + ' termék'));
+            tr.append(nev);
+
+            tr.append(ertek(szam(cs.bazisKg) + ' kg'));
+            tr.append(ertek(szam(cs.bazisFt) + ' Ft'));
+            tr.append(ertek(szam(Math.round(cs.tervKg)) + ' kg'));
+
+            var szazTd = el('td', 'szam');
+            szazTd.append(szazMezo(cs.mennySzaz, function (v) {
+                A.tervTerv.csoportok[cs.faj] = A.tervTerv.csoportok[cs.faj] || {};
+                A.tervTerv.csoportok[cs.faj].mennySzaz = v;
+                // A csoport átírása felülírja a benne lévő termékek kézi értékeit.
+                cs.sorok.forEach(function (s) { delete A.tervTerv.tetelek[s.termek]; });
+            }));
+            tr.append(szazTd);
+
+            tr.append(ertek(szam(Math.round(cs.tervFt)) + ' Ft',
+                (cs.valtozasFt >= 0 ? '+' : '') + rovidFt(cs.valtozasFt) + ' Ft'));
+            tbody.append(tr);
+
+            if (t.csakFajok) return;
+
+            cs.sorok.forEach(function (s) {
+                var sortr = el('tr');
+
+                var td1 = el('td');
+                td1.append(el('span', '', s.termek));
+                td1.append(el('span', 'alcim', s.bazisKg !== 0
+                    ? szam(Math.round(s.egysegar)) + ' Ft/kg'
+                    : (s.egyebMenny ? szam(s.egyebMenny) + ' ' + (s.egyseg || 'egyéb') : 'nincs mennyiség')));
+                sortr.append(td1);
+
+                sortr.append(ertek(s.bazisKg !== 0 ? szam(s.bazisKg) + ' kg'
+                    : (s.egyebMenny ? szam(s.egyebMenny) + ' ' + (s.egyseg || '') : '–')));
+                sortr.append(ertek(szam(s.bazisFt) + ' Ft'));
+
+                // Tervmennyiség kézzel átírható.
+                var mtd = el('td', 'szam');
+                var mi = el('input');
+                mi.type = 'text';
+                mi.inputMode = 'decimal';
+                mi.style.width = '7rem';
+                mi.value = s.bazisKg !== 0 ? szam(Math.round(s.tervKg)) : '';
+                mi.disabled = s.bazisKg === 0;
+                if (s.kezi) mi.classList.add('sajat');
+                mi.addEventListener('change', function () {
+                    A.tervTerv.tetelek[s.termek] = A.tervTerv.tetelek[s.termek] || {};
+                    A.tervTerv.tetelek[s.termek].menny = this.value.trim() === '' ? null : szamBe(this.value);
+                    ment();
+                    rajzolTermekTerv();
+                });
+                mtd.append(mi);
+                sortr.append(mtd);
+
+                var std = el('td', 'szam');
+                std.append(szazMezo(s.mennySzaz, function (v) {
+                    A.tervTerv.tetelek[s.termek] = A.tervTerv.tetelek[s.termek] || {};
+                    A.tervTerv.tetelek[s.termek].mennySzaz = v;
+                    A.tervTerv.tetelek[s.termek].menny = null;
+                }));
+                sortr.append(std);
+
+                sortr.append(ertek(szam(Math.round(s.tervFt)) + ' Ft',
+                    (s.valtozasFt >= 0 ? '+' : '') + rovidFt(s.valtozasFt) + ' Ft'));
+
+                tbody.append(sortr);
+            });
+        });
+
+        tb.append(thead, tbody);
+    }
+
     // --- nézetváltás és indulás -------------------------------------------
 
     function rajzol() {
         var sorok = szurt();
-        ['ertekesites', 'elorejelzes', 'vevok', 'tervezo'].forEach(function (n) {
+        ['ertekesites', 'elorejelzes', 'vevok', 'tervezo', 'terv'].forEach(function (n) {
             $('nezet' + n.charAt(0).toUpperCase() + n.slice(1)).hidden = A.nezet !== n;
         });
         // Csak a FŐ fülek – a tervezőn belüli Lista/Naptár/Éves gombok is „ful”
@@ -1348,6 +1540,7 @@
         if (A.nezet === 'elorejelzes') rajzolElorejelzes(sorok);
         if (A.nezet === 'vevok') rajzolVevok(sorok);
         if (A.nezet === 'tervezo') { rajzolMunkaigeny(); rajzolTerv(sorok); }
+        if (A.nezet === 'terv') rajzolTermekTerv();
     }
 
     /** Az átvizsgálás eredménye és a kérdések – csak ha van miről dönteni. */
@@ -1581,6 +1774,64 @@
         });
 
         $('feltoltesTorol').addEventListener('click', function () { A.jeloltek = []; ujraTerv(); });
+
+        // Értékesítési terv (terméktervező)
+        [['tervBazisEv', 'bazisEv'], ['tervBazisTol', 'bazisTol'], ['tervBazisIg', 'bazisIg']].forEach(function (p) {
+            $(p[0]).addEventListener('change', function () {
+                A.tervTerv[p[1]] = p[1] === 'bazisEv' ? this.value : (Number(this.value) || 1);
+                ment();
+                rajzolTermekTerv();
+            });
+        });
+
+        $('tervBeemel').addEventListener('click', function () {
+            A.tervTerv.beemelve = true;
+            ment();
+            rajzolTermekTerv();
+        });
+
+        [['tervMennySzaz', 'mennySzaz'], ['tervArSzaz', 'arSzaz']].forEach(function (p) {
+            $(p[0]).addEventListener('change', function () {
+                A.tervTerv[p[1]] = szamBe(this.value) || 0;
+                ment();
+                rajzolTermekTerv();
+            });
+        });
+
+        // A ± gombok a MOSTANI százalékhoz adnak hozzá.
+        [['data-tmenny', 'mennySzaz'], ['data-tar', 'arSzaz']].forEach(function (p) {
+            document.querySelectorAll('[' + p[0] + ']').forEach(function (g) {
+                g.addEventListener('click', function () {
+                    A.tervTerv[p[1]] = Math.round((A.tervTerv[p[1]] + Number(g.getAttribute(p[0]))) * 10) / 10;
+                    ment();
+                    rajzolTermekTerv();
+                });
+            });
+        });
+
+        $('tervVissza').addEventListener('click', function () {
+            A.tervTerv.mennySzaz = 0;
+            A.tervTerv.arSzaz = 0;
+            A.tervTerv.tetelek = {};
+            A.tervTerv.csoportok = {};
+            ment();
+            rajzolTermekTerv();
+        });
+
+        $('tervCsakFajok').addEventListener('click', function () {
+            A.tervTerv.csakFajok = !A.tervTerv.csakFajok;
+            ment();
+            rajzolTermekTerv();
+        });
+
+        // A terv összege lesz a munkaigény célja – így a két lap összeér.
+        $('tervCelbe').addEventListener('click', function () {
+            var r = E.termekTerv(tervBazisSorok(), A.tervTerv);
+            A.terv.cel = Math.round(r.ossz.tervFt);
+            ment();
+            $('tervCelbeUzenet').textContent = 'A munkaigény célja most ' + szam(A.terv.cel)
+                + ' Ft — nézd meg a Hívás- és látogatásterv lapon.';
+        });
 
         // Éves rács vezérlői
         [['data-evessor', 'evesSorMod'], ['data-eveskartya', 'evesKartya']].forEach(function (p) {

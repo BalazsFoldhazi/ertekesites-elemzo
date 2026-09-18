@@ -438,6 +438,57 @@ const SOROK = beolvasott.sorok;
     egyenlo('a sorok összege megegyezik a havi összeggel', soroszzeg, evesDb);
 }
 
+// --- értékesítési terv (terméktervező) --------------------------------------
+
+{
+    const fejlec = 'Üzleti év;Számlázási dátum;Vevőnév;Megye;Terméknév;Cikkcsoport;Értékesített mennyiség;Mértékegység;Nettó árbevétel;Pénznemkód;Üzletkötőkód';
+    const csv = [
+        fejlec,
+        '2025/2026;2026.05.10;Alfa Kft;BÉKÉS;Lucerna Ileana;LUCERNA;100;KG;1 000 000;HUF;LM',
+        '2025/2026;2026.05.11;Beta Kft;BÉKÉS;Lucerna Giulia;LUCERNA;50;KG;250 000;HUF;LM',
+        '2025/2026;2026.05.12;Gamma Kft;BÉKÉS;Zöldtrágya Nyári;ZÖLDTRÁGYA;40;KG;400 000;HUF;LM',
+    ].join('\n');
+    const S = B.csvBol(csv).sorok;
+
+    const alap = E.termekTerv(S, {});
+    egyenlo('három termék', alap.ossz.db, 3);
+    egyenlo('bázis összege', alap.ossz.bazisFt, 1650000);
+    egyenlo('terv alapból = bázis', Math.round(alap.ossz.tervFt), 1650000);
+    egyenlo('két cikkcsoport', alap.csoportok.length, 2);
+
+    // Az egységár a bázisból jön: 1 000 000 / 100 = 10 000 Ft/kg.
+    const ileana = alap.sorok.filter(function (s) { return s.termek === 'Lucerna Ileana'; })[0];
+    egyenlo('egységár a bázisból', ileana.egysegar, 10000);
+
+    egyenlo('+10% mennyiség', Math.round(E.termekTerv(S, { mennySzaz: 10 }).ossz.tervFt), Math.round(1650000 * 1.1));
+    egyenlo('+5% ár', Math.round(E.termekTerv(S, { arSzaz: 5 }).ossz.tervFt), Math.round(1650000 * 1.05));
+    egyenlo('mennyiség és ár együtt', Math.round(E.termekTerv(S, { mennySzaz: 10, arSzaz: 5 }).ossz.tervFt),
+        Math.round(1650000 * 1.1 * 1.05));
+
+    // Kézzel beírt mennyiség felülír mindent, és a százalékot visszafelé mutatja.
+    const kezi = E.termekTerv(S, { mennySzaz: 10, tetelek: { 'Lucerna Ileana': { menny: 200 } } });
+    const k1 = kezi.sorok.filter(function (s) { return s.termek === 'Lucerna Ileana'; })[0];
+    egyenlo('kézi mennyiség', k1.tervKg, 200);
+    egyenlo('kézi tervösszeg', Math.round(k1.tervFt), 2000000);
+    egyenlo('a százalék visszafelé is látszik', Math.round(k1.mennySzaz), 100);
+    igaz('kézi jelöles', k1.kezi);
+    // A másik termékre a globális +10% marad.
+    const k2 = kezi.sorok.filter(function (s) { return s.termek === 'Lucerna Giulia'; })[0];
+    egyenlo('a többi terméket nem érinti', Math.round(k2.tervFt), Math.round(250000 * 1.1));
+
+    // Cikkcsoport-szintű százalék a globális fölött, de a termék alatt.
+    const cs = E.termekTerv(S, { mennySzaz: 10, csoportok: { LUCERNA: { mennySzaz: 50 } } });
+    const l1 = cs.sorok.filter(function (s) { return s.termek === 'Lucerna Ileana'; })[0];
+    const z1 = cs.sorok.filter(function (s) { return s.termek === 'Zöldtrágya Nyári'; })[0];
+    egyenlo('a lucernára a csoport %-a hat', Math.round(l1.tervFt), Math.round(1000000 * 1.5));
+    egyenlo('a zöldtrágyára a globális marad', Math.round(z1.tervFt), Math.round(400000 * 1.1));
+
+    // Változás
+    const v = E.termekTerv(S, { mennySzaz: 20 }).ossz;
+    egyenlo('változás forintban', Math.round(v.valtozasFt), Math.round(1650000 * 0.2));
+    egyenlo('változás százalékban', Math.round(v.valtozasSzaz), 20);
+}
+
 // --- éves rács (sorok × hónapok, kártyákkal) --------------------------------
 
 {

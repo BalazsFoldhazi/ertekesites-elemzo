@@ -111,6 +111,7 @@
         <button type="button" class="ful" data-nezet="elorejelzes">Vásárlási előrejelzés</button>
         <button type="button" class="ful" data-nezet="vevok">Vevőelemzés</button>
         <button type="button" class="ful" data-nezet="tervezo">Hívás- és látogatásterv</button>
+        <button type="button" class="ful" data-nezet="terv">Értékesítési terv</button>
     </nav>
 
     <section id="nezetErtekesites" class="nezet" hidden>
@@ -208,6 +209,53 @@
             <p id="besorolasOsszegzes" class="besorolas-osszegzes"></p>
             <div class="gorgo"><table id="vevoTabla"></table></div>
             <p id="vevoTobb" class="halvany kicsi"></p>
+        </div>
+    </section>
+
+    <section id="nezetTerv" class="nezet" hidden>
+        <div class="kartya">
+            <h2>Terméktervező</h2>
+            <p class="halvany kicsi">
+                Emeld be egy korábbi időszak eladásait, aztán írd át a mennyiségeket, vagy hangold százalékkal
+                termékenként, cikkcsoportonként vagy egyben. Minden összeg azonnal újraszámol.
+                Az egységár a <strong>bázisból</strong> jön (Ft ÷ kg): árlista ebben az adatkörben nincs.
+            </p>
+
+            <div class="beallitosor">
+                <label>Bázis · üzleti év <select id="tervBazisEv"></select></label>
+                <label>Hónaptól <select id="tervBazisTol"></select></label>
+                <label>Hónapig <select id="tervBazisIg"></select></label>
+                <button type="button" id="tervBeemel" class="gomb">Bázis beemelése</button>
+            </div>
+
+            <div id="tervMutatok" class="mutatok"></div>
+
+            <div id="tervVezerlok" hidden>
+                <div class="beallitosor">
+                    <label>Összes mennyiség <input type="text" id="tervMennySzaz" inputmode="decimal"> %</label>
+                    <span class="szazalek-gombok">
+                        <button type="button" class="gomb halk" data-tmenny="-10">−10%</button>
+                        <button type="button" class="gomb halk" data-tmenny="-5">−5%</button>
+                        <button type="button" class="gomb halk" data-tmenny="5">+5%</button>
+                        <button type="button" class="gomb halk" data-tmenny="10">+10%</button>
+                    </span>
+                    <label>Összes ár <input type="text" id="tervArSzaz" inputmode="decimal"> %</label>
+                    <span class="szazalek-gombok">
+                        <button type="button" class="gomb halk" data-tar="-5">−5%</button>
+                        <button type="button" class="gomb halk" data-tar="5">+5%</button>
+                        <button type="button" class="gomb halk" data-tar="10">+10%</button>
+                    </span>
+                </div>
+                <div class="beallitosor">
+                    <button type="button" id="tervVissza" class="gomb halk">Vissza a bázisra</button>
+                    <button type="button" id="tervCsakFajok" class="gomb halk">Csak fajok / mind</button>
+                    <button type="button" id="tervCelbe" class="gomb">A terv célja → munkaigény</button>
+                    <span id="tervCelbeUzenet" class="halvany kicsi"></span>
+                </div>
+                <div class="gorgo"><table id="tervTermekTabla"></table></div>
+            </div>
+
+            <p id="tervTermekUres" class="halvany kicsi"></p>
         </div>
     </section>
 

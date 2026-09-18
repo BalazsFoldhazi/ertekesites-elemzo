@@ -935,6 +935,116 @@
         return { honapok: honapok, honapOssz: honapOssz, sorok: kiSorok, sorMod: sorMod, kartya: kartyaMod };
     }
 
+    /**
+     * ÉRTÉKESÍTÉSI TERVEZŐ: a bázis év eladásaiból terméksoros terv.
+     *
+     * A bázis termékenként összeadva; az egységár a bázisból jön (Ft ÷ kg),
+     * mert árlista ebben az adatkörben nincs. A tervmennyiség és az ár
+     * százalékosan hangolható – globálisan, cikkcsoportonként vagy
+     * termékenként –, és a terv összege azonnal újraszámol.
+     *
+     * A nem kilóban mért tételek (zsák, darab) mennyiségét külön tartjuk: azokat
+     * nem lehet kilóhoz adni, a tervük a százalékkal együtt mozog.
+     *
+     * @param beallitas {mennySzaz, arSzaz, tetelek:{[termek]:{menny, arSzaz}}, csoportok:{[faj]:{mennySzaz, arSzaz}}}
+     */
+    function termekTerv(sorok, beallitas) {
+        var b = beallitas || {};
+        var gMenny = Number(b.mennySzaz) || 0;
+        var gAr = Number(b.arSzaz) || 0;
+        var egyeni = b.tetelek || {};
+        var csoportB = b.csoportok || {};
+
+        var gy = {};
+        (sorok || []).forEach(function (s) {
+            var nev = String(s.termek || '').trim() || '(névtelen termék)';
+            gy[nev] = gy[nev] || {
+                termek: nev, faj: csoportNev(s),
+                bazisKg: 0, bazisFt: 0, egyebMenny: 0, egyseg: '',
+            };
+            var t = gy[nev];
+            t.bazisFt += ft(s);
+
+            var m = kg(s);
+            if (m !== 0) {
+                t.bazisKg += m;
+            } else if (Number(s.mennyiseg)) {
+                t.egyebMenny += Number(s.mennyiseg) || 0;
+                if (!t.egyseg) t.egyseg = String(s.egyseg || '').toLowerCase();
+            }
+        });
+
+        var sorokKi = Object.keys(gy).map(function (nev) {
+            var t = gy[nev];
+            var e = egyeni[nev] || {};
+            var cs = csoportB[t.faj] || {};
+
+            // A százalék öröklődik: termék > cikkcsoport > globális.
+            var mennySzaz = e.mennySzaz !== undefined && e.mennySzaz !== null ? Number(e.mennySzaz)
+                : (cs.mennySzaz !== undefined && cs.mennySzaz !== null ? Number(cs.mennySzaz) : gMenny);
+            var arSzaz = e.arSzaz !== undefined && e.arSzaz !== null ? Number(e.arSzaz)
+                : (cs.arSzaz !== undefined && cs.arSzaz !== null ? Number(cs.arSzaz) : gAr);
+
+            var egysegar = t.bazisKg !== 0 ? t.bazisFt / t.bazisKg : 0;
+
+            // A kézzel beírt mennyiség felülír mindent.
+            var kezi = e.menny !== undefined && e.menny !== null && e.menny !== '';
+            var tervKg = kezi ? Number(e.menny) : t.bazisKg * (1 + mennySzaz / 100);
+            if (kezi && t.bazisKg !== 0) mennySzaz = (tervKg / t.bazisKg - 1) * 100;
+
+            var tervFt = t.bazisKg !== 0
+                ? tervKg * egysegar * (1 + arSzaz / 100)
+                : t.bazisFt * (1 + mennySzaz / 100) * (1 + arSzaz / 100);
+
+            return {
+                termek: t.termek, faj: t.faj,
+                bazisKg: t.bazisKg, bazisFt: t.bazisFt,
+                egyebMenny: t.egyebMenny, egyseg: t.egyseg,
+                egysegar: egysegar,
+                tervKg: tervKg, tervFt: tervFt,
+                mennySzaz: mennySzaz, arSzaz: arSzaz,
+                kezi: kezi,
+                valtozasFt: tervFt - t.bazisFt,
+            };
+        }).sort(function (a, c) { return c.bazisFt - a.bazisFt; });
+
+        // Cikkcsoport-szintű összegzés
+        var csoportok = {};
+        sorokKi.forEach(function (s) {
+            csoportok[s.faj] = csoportok[s.faj] || {
+                faj: s.faj, db: 0, bazisKg: 0, bazisFt: 0, tervKg: 0, tervFt: 0, sorok: [],
+            };
+            var c = csoportok[s.faj];
+            c.db++;
+            c.bazisKg += s.bazisKg;
+            c.bazisFt += s.bazisFt;
+            c.tervKg += s.tervKg;
+            c.tervFt += s.tervFt;
+            c.sorok.push(s);
+        });
+
+        var csoportLista = Object.keys(csoportok).map(function (k) {
+            var c = csoportok[k];
+            c.mennySzaz = c.bazisKg !== 0 ? (c.tervKg / c.bazisKg - 1) * 100 : 0;
+            c.valtozasFt = c.tervFt - c.bazisFt;
+            return c;
+        }).sort(function (a, c) { return c.bazisFt - a.bazisFt; });
+
+        var ossz = { db: sorokKi.length, bazisKg: 0, bazisFt: 0, tervKg: 0, tervFt: 0, egyebMenny: 0 };
+        sorokKi.forEach(function (s) {
+            ossz.bazisKg += s.bazisKg;
+            ossz.bazisFt += s.bazisFt;
+            ossz.tervKg += s.tervKg;
+            ossz.tervFt += s.tervFt;
+            ossz.egyebMenny += s.egyebMenny;
+        });
+        ossz.valtozasFt = ossz.tervFt - ossz.bazisFt;
+        ossz.valtozasSzaz = ossz.bazisFt !== 0 ? (ossz.tervFt / ossz.bazisFt - 1) * 100 : 0;
+        ossz.mennySzaz = ossz.bazisKg !== 0 ? (ossz.tervKg / ossz.bazisKg - 1) * 100 : 0;
+
+        return { sorok: sorokKi, csoportok: csoportLista, ossz: ossz };
+    }
+
     /** A munkaigény-motor bemenete: a bázis vevői és ami már a listán van. */
     function munkaigenyAdat(sorok, terv, tervezoEredmeny, ma) {
         var v = vevok(sorok).map(function (x) { return { nev: x.vevo, ft: x.netto }; });
@@ -970,6 +1080,7 @@
         evesAdat: evesAdat,
         evesHonapok: evesHonapok,
         evesRacs: evesRacs,
+        termekTerv: termekTerv,
         megyek: megyek,
         feltolt: feltolt,
         munkaigenyAdat: munkaigenyAdat,
