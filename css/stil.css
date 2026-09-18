@@ -170,6 +170,14 @@ td input.szeles { width: 9rem; }
 
 .figyelem { color: var(--sarga); font-size: 14px; }
 
+/* Döntések a betöltött adatról */
+.dontes-blokk {
+    border: 1px solid var(--keret); border-radius: 10px;
+    padding: 10px 12px; margin: 10px 0;
+}
+.dontes-blokk label { display: block; margin: 5px 0; font-size: 14px; }
+.dontes-blokk input[type="text"] { width: 6rem; }
+
 /* Kártyán belüli, összecsukható rész */
 .alkartya {
     border: 1px solid var(--keret); border-radius: 10px;

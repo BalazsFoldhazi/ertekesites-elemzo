@@ -55,6 +55,41 @@
         <p id="allapot" class="allapot" hidden></p>
     </details>
 
+    <!-- Az adat átvizsgálása: amiről dönteni kell, mielőtt számolunk -->
+    <section id="dontesDoboz" class="kartya" hidden>
+        <h2>Az adat átvizsgálása</h2>
+        <p id="dontesOsszegzes" class="halvany kicsi"></p>
+
+        <div id="dontesNegativ" class="dontes-blokk" hidden>
+            <strong>Mínuszos összegű sorok</strong>
+            <p id="dontesNegativInfo" class="halvany kicsi"></p>
+            <label class="jelolo"><input type="radio" name="dNegativ" value="valtozatlan"> Maradjanak úgy, ahogy vannak — levonódnak az árbevételből</label>
+            <label class="jelolo"><input type="radio" name="dNegativ" value="kihagy"> Hagyja őket figyelmen kívül</label>
+            <label class="jelolo"><input type="radio" name="dNegativ" value="pozitiv"> Állítsa át pozitív előjelűre</label>
+        </div>
+
+        <div id="dontesEur" class="dontes-blokk" hidden>
+            <strong>Euróban jelölt (export) sorok</strong>
+            <p id="dontesEurInfo" class="halvany kicsi"></p>
+            <label class="jelolo"><input type="radio" name="dEur" value="marad"> Maradjon úgy, ahogy van</label>
+            <label class="jelolo"><input type="radio" name="dEur" value="valt"> Váltsa át forintra ezen az árfolyamon:
+                <input type="text" id="arfolyam" inputmode="decimal" placeholder="pl. 395"> Ft / EUR</label>
+            <p class="figyelem kicsi">
+                Vigyázz: sok exportnál az összeg <strong>már forintban</strong> áll, és a pénznemkód csak azt jelöli,
+                hogy a számla euróban kelt. Ilyenkor az átváltás megsokszorozná az árbevételt.
+            </p>
+        </div>
+
+        <div id="dontesFedezet" class="dontes-blokk" hidden>
+            <strong>Fedezet / árrés oszlop</strong>
+            <p id="dontesFedezetInfo" class="halvany kicsi"></p>
+            <label class="jelolo"><input type="radio" name="dFedezet" value="igen"> Vegye figyelembe — mutassa a fedezetet és a fedezeti hányadot</label>
+            <label class="jelolo"><input type="radio" name="dFedezet" value="nem"> Hagyja figyelmen kívül — csak az árbevétellel számoljon</label>
+        </div>
+
+        <button type="button" id="dontesAlkalmaz" class="gomb">Alkalmazás</button>
+    </section>
+
     <!-- Szűrők -->
     <section id="szuroSav" class="kartya szurok" hidden>
         <label>Üzleti év <select id="fEv"></select></label>
@@ -103,11 +138,16 @@
                 <h2>Üzletkötők árbevétele</h2>
                 <div class="vaszon"><canvas id="cUk"></canvas></div>
             </div>
-            <div class="kartya">
+            <div class="kartya" id="kartyaFedezet">
                 <h2>Fedezeti hányad cikkcsoportonként</h2>
-                <p class="halvany kicsi">A veszteséges csoport a nulla vonaltól balra áll.</p>
+                <p class="halvany kicsi">A fedezet az exportból jön. A nulla vonaltól balra álló csoport ráfizetéses.</p>
                 <div class="vaszon"><canvas id="cFedezet"></canvas></div>
             </div>
+        </div>
+
+        <div class="kartya">
+            <h2>Legnagyobb vevők</h2>
+            <div class="vaszon"><canvas id="cVevo"></canvas></div>
         </div>
 
         <p id="diagramUzenet" class="halvany kicsi"></p>

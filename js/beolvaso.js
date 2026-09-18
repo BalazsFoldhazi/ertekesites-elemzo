@@ -120,6 +120,7 @@
             mennyiseg: szam(r.ertekesitettmennyiseg),
             egyseg: rovid(r.mertekegyseg, 20),
             osszeg: szam(r.nettoarbevetel),
+            // A fedezet/árrés az exportból jön (nem számolt érték).
             fedezet: szam(r.fedezetarresft),
             uzletkoto: rovid(r.uzletkotokod, 30),
             // A pénznemkód CSAK azt jelöli, hogy exportszámla: az árbevétel és a

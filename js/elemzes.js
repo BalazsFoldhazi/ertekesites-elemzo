@@ -23,6 +23,79 @@
     function nap(s) { var r = String(s).split('-'); return new Date(Number(r[0]), Number(r[1]) - 1, Number(r[2])); }
     function honapKulcs(s) { return String(s).slice(0, 7); }
 
+    /**
+     * A betöltött fájl ÁTVIZSGÁLÁSA: mi az, amiről dönteni kell.
+     *
+     * Kétféle sor kíván döntést:
+     *  - MÍNUSZOS összeg: ezek nem hibák – jellemzően másképp kiegyenlített
+     *    tételek. Lehet őket kihagyni, vagy pozitívra fordítani.
+     *  - EUR-os (exportszámla) sor: van, ahol az összeg már forintban áll (akkor
+     *    nem szabad átváltani), és van, ahol tényleg euróban.
+     */
+    function atvizsgalas(sorok) {
+        var ki = {
+            sor: (sorok || []).length,
+            negativDb: 0, negativFt: 0,
+            eurDb: 0, eurFt: 0,
+            fedezetDb: 0, fedezetFt: 0,
+            elso: null, utolso: null,
+        };
+
+        (sorok || []).forEach(function (s) {
+            var e = ft(s);
+            if (e < 0) { ki.negativDb++; ki.negativFt += e; }
+            if (String(s.penznem || '').toUpperCase() === 'EUR') { ki.eurDb++; ki.eurFt += e; }
+            if (s.fedezet !== null && s.fedezet !== undefined) { ki.fedezetDb++; ki.fedezetFt += Number(s.fedezet) || 0; }
+            if (s.datum) {
+                if (ki.elso === null || s.datum < ki.elso) ki.elso = s.datum;
+                if (ki.utolso === null || s.datum > ki.utolso) ki.utolso = s.datum;
+            }
+        });
+
+        return ki;
+    }
+
+    /**
+     * A betöltéskor hozott döntések alkalmazása.
+     *
+     * Az EREDETI sorokat nem írjuk át: minden számolás ezen a származtatott
+     * listán fut, így a döntés bármikor megváltoztatható.
+     *
+     * @param dontes {negativ:'valtozatlan'|'kihagy'|'pozitiv', eur:'marad'|'valt', arfolyam:number}
+     */
+    function dontesAlkalmaz(sorok, dontes) {
+        var d = dontes || {};
+        var arfolyam = Number(d.arfolyam) > 0 ? Number(d.arfolyam) : 0;
+        var valt = d.eur === 'valt' && arfolyam > 0;
+        if (d.negativ !== 'kihagy' && d.negativ !== 'pozitiv' && !valt) return sorok || [];
+
+        var ki = [];
+        (sorok || []).forEach(function (s) {
+            var e = ft(s);
+            if (e < 0 && d.negativ === 'kihagy') return;
+
+            // A fedezet együtt mozog az összeggel: különben a fedezeti hányad hazudna.
+            var uj = s;
+            if (e < 0 && d.negativ === 'pozitiv') {
+                uj = Object.assign({}, uj, {
+                    osszeg: -e,
+                    mennyiseg: Math.abs(Number(uj.mennyiseg) || 0),
+                    fedezet: -(Number(uj.fedezet) || 0),
+                });
+            }
+            if (valt && String(s.penznem || '').toUpperCase() === 'EUR') {
+                uj = Object.assign({}, uj, {
+                    osszeg: (Number(uj.osszeg) || 0) * arfolyam,
+                    fedezet: (Number(uj.fedezet) || 0) * arfolyam,
+                    atvaltva: true,
+                });
+            }
+            ki.push(uj);
+        });
+
+        return ki;
+    }
+
     /** A lap szűrői: üzleti év, megye, üzletkötő, cikkcsoport, keresés. */
     function szur(sorok, szuro) {
         var sz = szuro || {};
@@ -66,6 +139,7 @@
 
     /** Összesítés + megye × üzletkötő kimutatás + cikkcsoport és üzleti év bontás. */
     function ertekesites(sorok) {
+        // A fedezet/árrés az exportból jön, nem számolt érték.
         var ossz = { netto: 0, fedezet: 0, kg: 0, vevo: 0, sor: (sorok || []).length };
         var vevok = {};
         var megyeSor = {};
@@ -798,6 +872,8 @@
     }
 
     glob.CegesElemzes = {
+        atvizsgalas: atvizsgalas,
+        dontesAlkalmaz: dontesAlkalmaz,
         szur: szur,
         valaszthato: valaszthato,
         ertekesites: ertekesites,

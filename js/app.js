@@ -17,6 +17,8 @@
         sorok: [],
         forras: '',
         szuro: { ev: '', megye: '', uzletkoto: '', cikkcsoport: '', piac: '', q: '' },
+        // Betöltéskor eldöntött kezelés: mínuszos sorok és euróban jelölt tételek.
+        dontes: { negativ: 'valtozatlan', eur: 'marad', arfolyam: 0, fedezet: 'igen' },
         nezet: 'ertekesites',
         korrekcio: 0,
         besorolas: { platinaFt: 5000000, kozel: 70, szuro: '' },
@@ -148,6 +150,7 @@
             localStorage.setItem(TAR, JSON.stringify({
                 sorok: A.sorok, forras: A.forras, szuro: A.szuro, besorolas: A.besorolas,
                 terv: A.terv, tervB: A.tervB, mi: A.mi, korrekcio: A.korrekcio,
+                dontes: A.dontes,
                 tervCsoport: A.tervCsoport, tervEgyeni: A.tervEgyeni, tervSzuro: A.tervSzuro,
                 tervCsoportosit: A.tervCsoportosit, tervNezet: A.tervNezet, naptarHonap: A.naptarHonap,
                 nezet: A.nezet, megyeNap: A.megyeNap, feltoltes: A.feltoltes, jeloltek: A.jeloltek,
@@ -164,7 +167,7 @@
             A.sorok = t.sorok;
             A.forras = t.forras || '';
             ['szuro', 'besorolas', 'terv', 'tervB', 'mi', 'tervCsoport', 'tervEgyeni', 'tervSzuro',
-                'megyeNap', 'feltoltes'].forEach(function (k) {
+                'megyeNap', 'feltoltes', 'dontes'].forEach(function (k) {
                 if (t[k] && typeof t[k] === 'object') A[k] = Object.assign(A[k], t[k]);
             });
             if (Array.isArray(t.jeloltek)) A.jeloltek = t.jeloltek;
@@ -292,6 +295,19 @@
             });
         });
 
+        // Egy jóváírás (mínuszos) és egy exportszámla – hogy a betöltés utáni
+        // kérdések a példán is látszódjanak.
+        sorok.push({
+            uzleti_ev: '2025/2026', datum: '2026-06-12', vevo_kod: 'V1001', vevo: 'Napsugár Agrár Kft',
+            megye: 'CSONGRÁD', cikkszam: 'C101', termek: 'Lucerna vetőmag', faj: 'LUCERNA',
+            mennyiseg: -300, egyseg: 'KG', osszeg: -450000, fedezet: -81000, uzletkoto: 'KER', penznem: 'HUF',
+        });
+        sorok.push({
+            uzleti_ev: '2025/2026', datum: '2026-04-08', vevo_kod: 'V1007', vevo: 'Határszél Mezőgazdasági Bt',
+            megye: 'SZOLNOK', cikkszam: 'C104', termek: 'Napraforgó hibrid', faj: 'NAPRAFORGÓ',
+            mennyiseg: 120, egyseg: 'KG', osszeg: 320000, fedezet: 57600, uzletkoto: 'KER', penznem: 'EUR',
+        });
+
         betolt(sorok, 'példaadat (kitalált nevek)');
         allapot(szam(sorok.length) + ' példasor betöltve. Ezek KITALÁLT nevek és számok – a saját fájlod betöltésével felülírod.');
     }
@@ -306,7 +322,7 @@
     }
 
     function szurokFeltolt() {
-        var v = E.valaszthato(A.sorok);
+        var v = E.valaszthato(adatSorok());
         legordulo($('fEv'), v.evek, A.szuro.ev);
         legordulo($('fMegye'), v.megyek, A.szuro.megye);
         legordulo($('fUzletkoto'), v.uzletkotok, A.szuro.uzletkoto);
@@ -315,7 +331,10 @@
         $('fKereses').value = A.szuro.q;
     }
 
-    function szurt() { return E.szur(A.sorok, A.szuro); }
+    /** A számoláshoz használt sorok: a betöltéskori döntésekkel együtt. */
+    function adatSorok() { return E.dontesAlkalmaz(A.sorok, A.dontes); }
+
+    function szurt() { return E.szur(adatSorok(), A.szuro); }
 
     // --- 1. Értékesítés ----------------------------------------------------
 
@@ -445,12 +464,22 @@
             oszlop('cUk', uk.map(function (x) { return x.uzletkoto; }),
                 uk.map(function (x) { return Math.round(x.netto / 1e6 * 10) / 10; }), 'M Ft');
 
-            // 5) Fedezeti hányad cikkcsoportonként – a veszteséges balra áll.
-            var fh = e.csoportok.slice(0, 12).map(function (x) {
-                return { csoport: x.csoport, mp: x.netto !== 0 ? x.fedezet / x.netto * 100 : 0 };
-            }).sort(function (a, b) { return b.mp - a.mp; });
-            oszlop('cFedezet', fh.map(function (x) { return x.csoport; }),
-                fh.map(function (x) { return Math.round(x.mp * 10) / 10; }), '%',
+            // 5) Fedezeti hányad cikkcsoportonként – csak ha kéred, és van hozzá adat.
+            var fkartya = $('kartyaFedezet');
+            if (fkartya) fkartya.hidden = !fedezetKell();
+            if (fedezetKell()) {
+                var fh = e.csoportok.slice(0, 12).map(function (x) {
+                    return { csoport: x.csoport, mp: x.netto !== 0 ? x.fedezet / x.netto * 100 : 0 };
+                }).sort(function (a, b) { return b.mp - a.mp; });
+                oszlop('cFedezet', fh.map(function (x) { return x.csoport; }),
+                    fh.map(function (x) { return Math.round(x.mp * 10) / 10; }), '%',
+                    function (v) { return v < 0 ? '#d98080' : SZIN[0]; });
+            }
+
+            // 6) Legnagyobb vevők (a mínuszos tétel itt is látszik, ha van)
+            var vv = E.vevok(sorok).slice(0, 12);
+            oszlop('cVevo', vv.map(function (x) { return x.vevo; }),
+                vv.map(function (x) { return Math.round(x.netto / 1e6 * 10) / 10; }), 'M Ft',
                 function (v) { return v < 0 ? '#d98080' : SZIN[0]; });
         });
     }
@@ -461,13 +490,16 @@
 
         var mutatok = $('ertMutatok');
         mutatok.textContent = '';
-        [
-            ['Nettó árbevétel', szam(e.ossz.netto / 1e6, 1) + ' M Ft', szam(e.ossz.sor) + ' számlatétel'],
-            ['Fedezet', szam(e.ossz.fedezet / 1e6, 1) + ' M Ft', 'árrés forintban'],
-            ['Fedezeti hányad', szam(hanyad, 1) + ' %', 'a nettó árbevételre vetítve'],
-            ['Értékesített mennyiség', szam(e.ossz.kg) + ' kg', 'csak a kilóban mért tételek'],
-            ['Vásárló vevő', szam(e.ossz.vevo), 'a szűrt időszakban'],
-        ].forEach(function (m) {
+
+        var lista = [['Nettó árbevétel', szam(e.ossz.netto / 1e6, 1) + ' M Ft', szam(e.ossz.sor) + ' számlatétel']];
+        if (fedezetKell()) {
+            lista.push(['Fedezet', szam(e.ossz.fedezet / 1e6, 1) + ' M Ft', 'az exportból, nem számolt']);
+            lista.push(['Fedezeti hányad', szam(hanyad, 1) + ' %', 'a nettó árbevételre vetítve']);
+        }
+        lista.push(['Értékesített mennyiség', szam(e.ossz.kg) + ' kg', 'csak a kilóban mért tételek']);
+        lista.push(['Vásárló vevő', szam(e.ossz.vevo), 'a szűrt időszakban']);
+
+        lista.forEach(function (m) {
             var d = el('div', 'mutato');
             d.append(el('div', 'cimke', m[0]), el('div', 'ertek', m[1]), el('div', 'alcim', m[2]));
             mutatok.append(d);
@@ -559,7 +591,7 @@
         if ($('platinaFt') !== document.activeElement) $('platinaFt').value = szam(A.besorolas.platinaFt);
         $('kozel').value = A.besorolas.kozel;
 
-        var bes = E.besorolas(A.sorok, A.szuro, A.besorolas);
+        var bes = E.besorolas(adatSorok(), A.szuro, A.besorolas);
 
         var szuroMezo = $('besorolasSzuro');
         szuroMezo.textContent = '';
@@ -581,34 +613,37 @@
             return !A.besorolas.szuro || bes.besorolasok[v.vevo] === A.besorolas.szuro;
         });
 
-        tabla($('vevoTabla'),
-            ['Vevő', 'Mit vásárolt', { szoveg: 'Mennyiség', szam: true }, { szoveg: 'Nettó', szam: true },
-                { szoveg: 'Fedezet', szam: true }, { szoveg: 'Alkalom', szam: true }, 'Utolsó vásárlás'],
+        var fejlecek = ['Vevő', 'Mit vásárolt', { szoveg: 'Mennyiség', szam: true }, { szoveg: 'Nettó', szam: true }];
+        if (fedezetKell()) fejlecek.push({ szoveg: 'Fedezet', szam: true });
+        fejlecek.push({ szoveg: 'Alkalom', szam: true }, 'Utolsó vásárlás');
+
+        tabla($('vevoTabla'), fejlecek,
             lista.slice(0, LISTA_MAX).map(function (v) {
                 var b = bes.besorolasok[v.vevo];
                 var alapFt = bes.alapFt[v.vevo];
-                var arres = v.netto > 0 ? szam(v.fedezet / v.netto * 100, 1) + '%' : '';
+                var arres = v.netto !== 0 ? szam(v.fedezet / v.netto * 100, 1) + '%' : '';
                 var mit = v.csoportLista.slice(0, 4).map(function (c) {
                     return c.csoport + ' · ' + szam(c.kg) + ' kg · ' + rovidFt(c.netto) + ' Ft';
                 }).join('\n');
 
-                return {
-                    cellak: [
-                        {
-                            szoveg: v.vevo,
-                            alcim: [v.megye || '—', v.uzletkoto].filter(Boolean).join(' · ')
-                                + (alapFt !== undefined && Math.round(alapFt) !== Math.round(v.netto)
-                                    ? ' · ' + bes.ev + ': ' + szam(alapFt) + ' Ft' : ''),
-                            jelveny: b ? { tipus: b, szoveg: BESOROLAS_CIMKE[b] } : null,
-                        },
-                        { szoveg: mit + (v.csoportLista.length > 4 ? '\n+' + (v.csoportLista.length - 4) + ' további' : ''), tobbsoros: true },
-                        { szoveg: szam(v.kg) + ' kg', szam: true },
-                        { szoveg: szam(v.netto) + ' Ft', szam: true },
-                        { szoveg: szam(v.fedezet) + ' Ft', alcim: arres, szam: true },
-                        { szoveg: szam(v.alkalmak), szam: true },
-                        { szoveg: datumCimke(v.utolso), alcim: 'első: ' + datumCimke(v.elso) },
-                    ],
-                };
+                var cellak = [
+                    {
+                        szoveg: v.vevo,
+                        alcim: [v.megye || '—', v.uzletkoto].filter(Boolean).join(' · ')
+                            + (alapFt !== undefined && Math.round(alapFt) !== Math.round(v.netto)
+                                ? ' · ' + bes.ev + ': ' + szam(alapFt) + ' Ft' : ''),
+                        jelveny: b ? { tipus: b, szoveg: BESOROLAS_CIMKE[b] } : null,
+                    },
+                    { szoveg: mit + (v.csoportLista.length > 4 ? '\n+' + (v.csoportLista.length - 4) + ' további' : ''), tobbsoros: true },
+                    { szoveg: szam(v.kg) + ' kg', szam: true },
+                    { szoveg: szam(v.netto) + ' Ft', szam: true },
+                ];
+
+                if (fedezetKell()) cellak.push({ szoveg: szam(v.fedezet) + ' Ft', alcim: arres, szam: true });
+                cellak.push({ szoveg: szam(v.alkalmak), szam: true });
+                cellak.push({ szoveg: datumCimke(v.utolso), alcim: 'első: ' + datumCimke(v.elso) });
+
+                return { cellak: cellak };
             }));
 
         $('vevoTobb').textContent = lista.length > LISTA_MAX
@@ -1246,9 +1281,65 @@
         if (A.nezet === 'tervezo') { rajzolMunkaigeny(); rajzolTerv(sorok); }
     }
 
+    /** Az átvizsgálás eredménye és a kérdések – csak ha van miről dönteni. */
+    function rajzolDontes() {
+        var doboz = $('dontesDoboz');
+        if (!A.sorok.length) { doboz.hidden = true; return; }
+
+        var a = E.atvizsgalas(A.sorok);
+        doboz.hidden = a.negativDb === 0 && a.eurDb === 0 && a.fedezetDb === 0;
+
+        $('dontesOsszegzes').textContent = szam(a.sor) + ' sor beolvasva'
+            + (a.elso ? ' · ' + datumCimke(a.elso) + ' – ' + datumCimke(a.utolso) : '')
+            + ' · ezekről érdemes dönteni, mielőtt számolunk:';
+
+        $('dontesNegativ').hidden = a.negativDb === 0;
+        if (a.negativDb) {
+            $('dontesNegativInfo').textContent = szam(a.negativDb) + ' sor mínuszos, összesen '
+                + szam(a.negativFt) + ' Ft. Ezek jellemzően másképp kiegyenlített tételek, nem hibák.';
+        }
+
+        $('dontesEur').hidden = a.eurDb === 0;
+        if (a.eurDb) {
+            $('dontesEurInfo').textContent = szam(a.eurDb) + ' sor euróban jelölt (exportszámla), a fájlban szereplő '
+                + 'összegük együtt ' + szam(a.eurFt) + '.';
+        }
+
+        $('dontesFedezet').hidden = a.fedezetDb === 0;
+        if (a.fedezetDb) {
+            $('dontesFedezetInfo').textContent = szam(a.fedezetDb) + ' sorban van fedezet/árrés adat, összesen '
+                + szam(a.fedezetFt) + ' Ft. Ez az exportból jön, nem számolt érték.';
+        }
+
+        document.querySelectorAll('input[name="dNegativ"]').forEach(function (r) { r.checked = r.value === A.dontes.negativ; });
+        document.querySelectorAll('input[name="dEur"]').forEach(function (r) { r.checked = r.value === A.dontes.eur; });
+        document.querySelectorAll('input[name="dFedezet"]').forEach(function (r) { r.checked = r.value === A.dontes.fedezet; });
+        $('arfolyam').value = A.dontes.arfolyam ? szam(A.dontes.arfolyam, 2) : '';
+    }
+
+    /** Számoljunk-e a fedezettel? (Csak ha van ilyen oszlop, és kérted.) */
+    function fedezetKell() {
+        return A.dontes.fedezet !== 'nem' && E.atvizsgalas(A.sorok).fedezetDb > 0;
+    }
+
+    /** Egy mondatban, mi lett a döntés – hogy később is látszódjon. */
+    function dontesUzenet() {
+        var r = [];
+        r.push(A.dontes.negativ === 'kihagy' ? 'a mínuszos sorokat kihagyjuk'
+            : (A.dontes.negativ === 'pozitiv' ? 'a mínuszos sorokat pozitívra állítjuk'
+                : 'a mínuszos sorok változatlanok (levonódnak)'));
+        r.push(A.dontes.eur === 'valt'
+            ? 'az euróban jelölt sorokat ' + szam(A.dontes.arfolyam, 2) + ' Ft/EUR árfolyamon átváltjuk'
+            : 'az euróban jelölt sorokat nem váltjuk át');
+        r.push(fedezetKell() ? 'a fedezettel is számolunk' : 'a fedezetet nem vesszük figyelembe');
+
+        return 'Beállítva: ' + r.join(' · ') + '.';
+    }
+
     function indul() {
         var van = A.sorok.length > 0;
         betoltoFejlec();
+        rajzolDontes();
         $('szuroSav').hidden = !van;
         $('fulek').hidden = !van;
         $('torolGomb').hidden = !van;
@@ -1277,6 +1368,25 @@
         });
         doboz.addEventListener('drop', function (ev) {
             if (ev.dataTransfer && ev.dataTransfer.files.length) fajlBe(ev.dataTransfer.files[0]);
+        });
+
+        $('dontesAlkalmaz').addEventListener('click', function () {
+            var n = document.querySelector('input[name="dNegativ"]:checked');
+            var e2 = document.querySelector('input[name="dEur"]:checked');
+            var f2 = document.querySelector('input[name="dFedezet"]:checked');
+            A.dontes.negativ = n ? n.value : 'valtozatlan';
+            A.dontes.eur = e2 ? e2.value : 'marad';
+            A.dontes.fedezet = f2 ? f2.value : 'igen';
+            A.dontes.arfolyam = szamBe($('arfolyam').value) || 0;
+
+            if (A.dontes.eur === 'valt' && !(A.dontes.arfolyam > 0)) {
+                allapot('Az átváltáshoz adj meg egy árfolyamot (Ft/EUR).', true);
+                return;
+            }
+
+            ment();
+            indul();
+            allapot(dontesUzenet());
         });
 
         $('peldaGomb').addEventListener('click', peldaAdat);

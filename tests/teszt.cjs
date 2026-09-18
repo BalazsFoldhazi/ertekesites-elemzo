@@ -72,6 +72,64 @@ igaz('hiányzó oszlopot jelez', B.hianyzoOszlopok(['Üzleti év', 'Megye']).ind
 
 const SOROK = beolvasott.sorok;
 
+// --- átvizsgálás és a betöltéskori döntések ---------------------------------
+
+{
+    const fejlec = 'Üzleti év;Számlázási dátum;Vevőnév;Megye;Terméknév;Cikkcsoport;Értékesített mennyiség;Mértékegység;Nettó árbevétel;Pénznemkód;Üzletkötőkód';
+    const csv = [
+        fejlec,
+        '2025/2026;2026.05.10;Alfa Kft;BÉKÉS;Lucerna;LUCERNA;100;KG;1 000 000;HUF;LM',
+        '2025/2026;2026.05.11;Beta Kft;BÉKÉS;Lucerna;LUCERNA;-20;KG;-200 000;HUF;LM',
+        '2025/2026;2026.05.12;Gamma Kft;BÉKÉS;Lucerna;LUCERNA;50;KG;3 000;EUR;LM',
+    ].join('\n');
+    const b = B.csvBol(csv);
+
+    const a = E.atvizsgalas(b.sorok);
+    egyenlo('mínuszos sorok száma', a.negativDb, 1);
+    egyenlo('mínuszos összeg', a.negativFt, -200000);
+    egyenlo('euróban jelölt sorok', a.eurDb, 1);
+    egyenlo('átvizsgált sorok', a.sor, 3);
+
+    const netto = (d) => E.ertekesites(E.dontesAlkalmaz(b.sorok, d)).ossz.netto;
+
+    egyenlo('változatlanul: levonódik', netto({ negativ: 'valtozatlan' }), 1000000 - 200000 + 3000);
+    egyenlo('kihagyva', netto({ negativ: 'kihagy' }), 1000000 + 3000);
+    egyenlo('pozitívra állítva', netto({ negativ: 'pozitiv' }), 1000000 + 200000 + 3000);
+    egyenlo('kihagyásnál a sor is eltűnik', E.dontesAlkalmaz(b.sorok, { negativ: 'kihagy' }).length, 2);
+
+    // Átváltás: CSAK az euróban jelölt sort érinti.
+    egyenlo('átváltva 400-zal', netto({ negativ: 'valtozatlan', eur: 'valt', arfolyam: 400 }),
+        1000000 - 200000 + 3000 * 400);
+    egyenlo('árfolyam nélkül nincs átváltás', netto({ negativ: 'valtozatlan', eur: 'valt', arfolyam: 0 }),
+        1000000 - 200000 + 3000);
+
+    // Az EREDETI sorokat nem írjuk át – a döntés bármikor megváltoztatható.
+    egyenlo('az eredeti sor érintetlen', b.sorok[1].osszeg, -200000);
+}
+
+// A fedezet EGYÜTT MOZOG az összeggel, különben a fedezeti hányad hazudna.
+{
+    const fejlec = 'Üzleti év;Számlázási dátum;Vevőnév;Megye;Terméknév;Cikkcsoport;Értékesített mennyiség;Mértékegység;Nettó árbevétel;Pénznemkód;Fedezet/árrés Ft;Üzletkötőkód';
+    const csv = [
+        fejlec,
+        '2025/2026;2026.05.11;Beta Kft;BÉKÉS;Lucerna;LUCERNA;-20;KG;-200 000;HUF;-40 000;LM',
+        '2025/2026;2026.05.12;Gamma Kft;BÉKÉS;Lucerna;LUCERNA;50;KG;3 000;EUR;600;LM',
+    ].join('\n');
+    const b = B.csvBol(csv);
+
+    egyenlo('a fedezet beolvasva', b.sorok[0].fedezet, -40000);
+
+    const pozitiv = E.ertekesites(E.dontesAlkalmaz(b.sorok, { negativ: 'pozitiv' }));
+    egyenlo('pozitívra állítva az összeg', pozitiv.ossz.netto, 200000 + 3000);
+    egyenlo('pozitívra állítva a fedezet is', pozitiv.ossz.fedezet, 40000 + 600);
+
+    const valtott = E.ertekesites(E.dontesAlkalmaz(b.sorok, { eur: 'valt', arfolyam: 400 }));
+    egyenlo('átváltva a fedezet is', valtott.ossz.fedezet, -40000 + 600 * 400);
+
+    const kihagyva = E.ertekesites(E.dontesAlkalmaz(b.sorok, { negativ: 'kihagy' }));
+    egyenlo('kihagyásnál a fedezete is kimarad', kihagyva.ossz.fedezet, 600);
+}
+
 // --- piac (belföld / export) -------------------------------------------------
 
 {
