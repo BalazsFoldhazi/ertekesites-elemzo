@@ -853,6 +853,88 @@
         return { honapok: honapLista, sorok: sorok, ossz: ossz };
     }
 
+    /**
+     * Hónapok listája egy adott hónaptól: ['2026-09', '2026-10', …]
+     */
+    function evesHonapok(tol, db) {
+        var ev = Number(String(tol).slice(0, 4));
+        var ho = Number(String(tol).slice(5, 7));
+        var ki = [];
+
+        for (var i = 0; i < Math.max(1, db); i++) {
+            var d = new Date(ev, ho - 1 + i, 1);
+            ki.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+        }
+
+        return ki;
+    }
+
+    /**
+     * ÉVES RÁCS: sorok (megye / faj / faj › megye) × oszlopok (hónapok), a
+     * cellákban kártyákkal.
+     *
+     * A kártya lehet FAJ (az adott hónap fajonkénti darabszáma) vagy PARTNER
+     * (vevőnként egy kártya) – a tervezőben is így váltható.
+     *
+     * @param opciok {sorMod:'megye'|'faj'|'fajmegye', kartya:'faj'|'partner', honapok:[...]}
+     */
+    function evesRacs(lista, opciok) {
+        var o = opciok || {};
+        var sorMod = o.sorMod || 'megye';
+        var kartyaMod = o.kartya === 'partner' ? 'partner' : 'faj';
+        var honapok = o.honapok || [];
+
+        var honapSet = {};
+        honapok.forEach(function (h) { honapSet[h] = true; });
+
+        var sorok = {};
+        var honapOssz = {};
+        honapok.forEach(function (h) { honapOssz[h] = { hivas: 0, latogatas: 0 }; });
+
+        var tesz = function (s, mit, d) {
+            var h = ymd(d).slice(0, 7);
+            if (!honapSet[h]) return;
+
+            var megye = s.megye || '(nincs megye)';
+            var faj = s.faj || '(nincs cikkcsoport)';
+            var sorKulcs = sorMod === 'megye' ? megye : (sorMod === 'faj' ? faj : faj + ' › ' + megye);
+
+            sorok[sorKulcs] = sorok[sorKulcs] || {
+                kulcs: sorKulcs, cimke: sorKulcs, megye: megye, faj: faj,
+                hivas: 0, latogatas: 0, cellak: {},
+            };
+            var sor = sorok[sorKulcs];
+            sor[mit]++;
+            honapOssz[h][mit]++;
+
+            sor.cellak[h] = sor.cellak[h] || {};
+            var kk = kartyaMod === 'faj' ? faj : s.vevo;
+            sor.cellak[h][kk] = sor.cellak[h][kk] || { cimke: kk, faj: faj, hivas: 0, latogatas: 0, db: 0 };
+            sor.cellak[h][kk][mit]++;
+            sor.cellak[h][kk].db++;
+        };
+
+        (lista || []).forEach(function (s) {
+            if (s.hivasBe && s.hivasDatum) tesz(s, 'hivas', s.hivasDatum);
+            if (s.latogatasBe && s.latogatasDatum) tesz(s, 'latogatas', s.latogatasDatum);
+        });
+
+        var kiSorok = Object.keys(sorok).map(function (k) {
+            var sor = sorok[k];
+            // A cellákban a kártyák darabszám szerint, a nagyobb elöl.
+            sor.kartyak = {};
+            Object.keys(sor.cellak).forEach(function (h) {
+                sor.kartyak[h] = Object.keys(sor.cellak[h]).map(function (kk) { return sor.cellak[h][kk]; })
+                    .sort(function (a, b) { return b.db - a.db || a.cimke.localeCompare(b.cimke, 'hu'); });
+            });
+            return sor;
+        }).sort(function (a, b) {
+            return (b.hivas + b.latogatas) - (a.hivas + a.latogatas) || a.cimke.localeCompare(b.cimke, 'hu');
+        });
+
+        return { honapok: honapok, honapOssz: honapOssz, sorok: kiSorok, sorMod: sorMod, kartya: kartyaMod };
+    }
+
     /** A munkaigény-motor bemenete: a bázis vevői és ami már a listán van. */
     function munkaigenyAdat(sorok, terv, tervezoEredmeny, ma) {
         var v = vevok(sorok).map(function (x) { return { nev: x.vevo, ft: x.netto }; });
@@ -886,6 +968,8 @@
         csoportosit: csoportosit,
         naptarAdat: naptarAdat,
         evesAdat: evesAdat,
+        evesHonapok: evesHonapok,
+        evesRacs: evesRacs,
         megyek: megyek,
         feltolt: feltolt,
         munkaigenyAdat: munkaigenyAdat,

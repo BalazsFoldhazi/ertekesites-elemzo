@@ -31,6 +31,11 @@
         tervCsoportosit: true,
         tervNezet: 'lista',
         naptarHonap: null,
+        // Éves rács: sorok, kártyák és az egyszerre látszó hónapok száma.
+        evesSorMod: 'megye',
+        evesKartya: 'faj',
+        evesHonapDb: 12,
+        evesTol: null,
         // Megyenapok: melyik hétköznap melyik megyékbe megyünk.
         megyeNap: { be: false, hivas: true, napok: {} },
         // Naptár feltöltése: napi célszám és a kiosztott jelöltek.
@@ -153,6 +158,7 @@
                 dontes: A.dontes,
                 tervCsoport: A.tervCsoport, tervEgyeni: A.tervEgyeni, tervSzuro: A.tervSzuro,
                 tervCsoportosit: A.tervCsoportosit, tervNezet: A.tervNezet, naptarHonap: A.naptarHonap,
+                evesSorMod: A.evesSorMod, evesKartya: A.evesKartya, evesHonapDb: A.evesHonapDb, evesTol: A.evesTol,
                 nezet: A.nezet, megyeNap: A.megyeNap, feltoltes: A.feltoltes, jeloltek: A.jeloltek,
             }));
         } catch (e) {
@@ -176,6 +182,10 @@
             if (t.nezet) A.nezet = t.nezet;
             if (t.tervNezet) A.tervNezet = t.tervNezet;
             if (t.naptarHonap) A.naptarHonap = t.naptarHonap;
+            if (t.evesSorMod) A.evesSorMod = t.evesSorMod;
+            if (t.evesKartya) A.evesKartya = t.evesKartya;
+            if (t.evesHonapDb) A.evesHonapDb = Number(t.evesHonapDb) || 12;
+            if (t.evesTol) A.evesTol = t.evesTol;
             return true;
         } catch (e) { return false; }
     }
@@ -1127,32 +1137,91 @@
         }
     }
 
+    var HONAP_ROVID = ['jan', 'feb', 'márc', 'ápr', 'máj', 'jún', 'júl', 'aug', 'szept', 'okt', 'nov', 'dec'];
+
+    /** Stabil szín a cikkcsoport nevéből: ugyanaz a faj mindig ugyanolyan. */
+    function evesSzin(faj) {
+        var h = 0;
+        String(faj || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 360; });
+        return { hatter: 'hsl(' + h + ' 42% 24%)', keret: 'hsl(' + h + ' 42% 38%)', szoveg: 'hsl(' + h + ' 55% 86%)' };
+    }
+
+    function honapCimke(kulcs) {
+        var ho = Number(kulcs.slice(5, 7));
+        return HONAP_ROVID[ho - 1] + ' ' + kulcs.slice(0, 4);
+    }
+
+    /** Egy kártya a rácsban: darabszám, név, és a hívás/látogatás bontás. */
+    function evesKartya(k) {
+        var sz = evesSzin(k.faj);
+        var e = el('span', 'evkartya');
+        e.style.background = sz.hatter;
+        e.style.borderColor = sz.keret;
+        e.style.color = sz.szoveg;
+        e.title = k.cimke + ' · ' + k.db + ' megkeresés (📞 ' + k.hivas + ' · 🚗 ' + k.latogatas + ')';
+
+        e.append(el('span', 'db', String(k.db)));
+        e.append(document.createTextNode(k.cimke));
+        if (k.latogatas > 0) e.append(el('span', 'jel', '🚗 ' + k.latogatas));
+
+        return e;
+    }
+
     function rajzolEves(lista) {
-        var a = E.evesAdat(lista);
-        var cimke = function (h) { return h.slice(0, 4) + '. ' + h.slice(5, 7) + '.'; };
-        var parban = function (c) { return c && (c.hivas || c.latogatas) ? '📞 ' + c.hivas + ' · 🚗 ' + c.latogatas : '–'; };
-
-        var fejlec = ['Cikkcsoport'].concat(a.honapok.map(function (h) { return { szoveg: cimke(h), szam: true }; }))
-            .concat([{ szoveg: 'Összesen', szam: true }]);
-
-        var sorok = a.sorok.map(function (s) {
-            return {
-                cellak: [s.faj].concat(a.honapok.map(function (h) {
-                    return { szoveg: parban(s.honapok[h]), szam: true };
-                })).concat([{ szoveg: parban(s.ossz), szam: true }]),
-            };
+        document.querySelectorAll('[data-evessor]').forEach(function (g) {
+            g.classList.toggle('aktiv', g.dataset.evessor === A.evesSorMod);
+        });
+        document.querySelectorAll('[data-eveskartya]').forEach(function (g) {
+            g.classList.toggle('aktiv', g.dataset.eveskartya === A.evesKartya);
+        });
+        document.querySelectorAll('[data-eveshonap]').forEach(function (g) {
+            g.classList.toggle('aktiv', Number(g.dataset.eveshonap) === A.evesHonapDb);
         });
 
-        var mind = { hivas: 0, latogatas: 0 };
-        a.honapok.forEach(function (h) { mind.hivas += a.ossz[h].hivas; mind.latogatas += a.ossz[h].latogatas; });
-        sorok.push({
-            osztaly: 'osszesen',
-            cellak: ['Összesen'].concat(a.honapok.map(function (h) {
-                return { szoveg: parban(a.ossz[h]), szam: true };
-            })).concat([{ szoveg: parban(mind), szam: true }]),
+        if (!A.evesTol) A.evesTol = maStr().slice(0, 7);
+        var honapok = E.evesHonapok(A.evesTol, A.evesHonapDb);
+        var r = E.evesRacs(lista, { sorMod: A.evesSorMod, kartya: A.evesKartya, honapok: honapok });
+        var maiHonap = maStr().slice(0, 7);
+
+        var tb = $('evesTabla');
+        tb.textContent = '';
+
+        var thead = el('thead');
+        var fejsor = el('tr');
+        var elso = el('th', 'sorfej', A.evesSorMod === 'faj' ? 'Cikkcsoport'
+            : (A.evesSorMod === 'megye' ? 'Megye' : 'Cikkcsoport › megye'));
+        fejsor.append(elso);
+
+        honapok.forEach(function (h) {
+            var th = el('th', h === maiHonap ? 'mai' : '');
+            th.append(el('span', '', honapCimke(h)));
+            var o = r.honapOssz[h];
+            th.append(el('span', 'alcim', '📞 ' + o.hivas + ' · 🚗 ' + o.latogatas));
+            fejsor.append(th);
+        });
+        thead.append(fejsor);
+
+        var tbody = el('tbody');
+        r.sorok.forEach(function (sor) {
+            var tr = el('tr');
+            var fej = el('td', 'sorfej');
+            fej.append(el('b', '', sor.cimke));
+            fej.append(el('span', 'alcim', '📞 ' + sor.hivas + ' · 🚗 ' + sor.latogatas));
+            tr.append(fej);
+
+            honapok.forEach(function (h) {
+                var td = el('td', 'cella' + (h === maiHonap ? ' mai' : ''));
+                (sor.kartyak[h] || []).forEach(function (k) { td.append(evesKartya(k)); });
+                tr.append(td);
+            });
+
+            tbody.append(tr);
         });
 
-        tabla($('evesTabla'), fejlec, sorok);
+        tb.append(thead, tbody);
+
+        $('evesUres').textContent = r.sorok.length ? ''
+            : 'Ebben az időszakban nincs tervezett megkeresés – lapozz a ‹ › gombokkal, vagy válassz hosszabb időszakot.';
     }
 
     function rajzolTerv(sorok) {
@@ -1512,6 +1581,41 @@
         });
 
         $('feltoltesTorol').addEventListener('click', function () { A.jeloltek = []; ujraTerv(); });
+
+        // Éves rács vezérlői
+        [['data-evessor', 'evesSorMod'], ['data-eveskartya', 'evesKartya']].forEach(function (p) {
+            document.querySelectorAll('[' + p[0] + ']').forEach(function (g) {
+                g.addEventListener('click', function () {
+                    A[p[1]] = g.getAttribute(p[0]);
+                    ment();
+                    rajzolTerv(szurt());
+                });
+            });
+        });
+        document.querySelectorAll('[data-eveshonap]').forEach(function (g) {
+            g.addEventListener('click', function () {
+                A.evesHonapDb = Number(g.dataset.eveshonap) || 12;
+                ment();
+                rajzolTerv(szurt());
+            });
+        });
+
+        // Léptetés: annyit ugrunk, amennyi épp látszik.
+        [['evesElozo', -1], ['evesKovetkezo', 1]].forEach(function (p) {
+            $(p[0]).addEventListener('click', function () {
+                var ev = Number(A.evesTol.slice(0, 4));
+                var ho = Number(A.evesTol.slice(5, 7)) - 1 + p[1] * A.evesHonapDb;
+                var d = new Date(ev, ho, 1);
+                A.evesTol = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                ment();
+                rajzolTerv(szurt());
+            });
+        });
+        $('evesMa').addEventListener('click', function () {
+            A.evesTol = maStr().slice(0, 7);
+            ment();
+            rajzolTerv(szurt());
+        });
 
         // Naptár-lapozás hónapról hónapra (üres hónap is megnézhető).
         [['naptarElozo', -1], ['naptarKovetkezo', 1]].forEach(function (p) {

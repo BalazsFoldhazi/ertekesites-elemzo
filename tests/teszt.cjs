@@ -438,6 +438,50 @@ const SOROK = beolvasott.sorok;
     egyenlo('a sorok összege megegyezik a havi összeggel', soroszzeg, evesDb);
 }
 
+// --- éves rács (sorok × hónapok, kártyákkal) --------------------------------
+
+{
+    const t = E.tervezo(SOROK, {}, '2026-09-17');
+    const lista = E.idozit(t, {}, {}, {}, '2026-09-17');
+
+    egyenlo('12 hónap', E.evesHonapok('2026-09', 12).length, 12);
+    egyenlo('az első hónap a megadott', E.evesHonapok('2026-09', 12)[0], '2026-09');
+    egyenlo('évfordulón átlép', E.evesHonapok('2026-11', 3).join(','), '2026-11,2026-12,2027-01');
+
+    // Az összes tétel hónapja, hogy biztosan beleférjen az ablakba.
+    const honapok = [];
+    lista.forEach(function (s) {
+        if (s.hivasBe && s.hivasDatum) honapok.push(napStr(s.hivasDatum).slice(0, 7));
+        if (s.latogatasBe && s.latogatasDatum) honapok.push(napStr(s.latogatasDatum).slice(0, 7));
+    });
+    const mind = Array.from(new Set(honapok)).sort();
+
+    const megyesorok = E.evesRacs(lista, { sorMod: 'megye', kartya: 'faj', honapok: mind });
+    igaz('van sor', megyesorok.sorok.length > 0);
+    egyenlo('megye módban a megye a sor', megyesorok.sorok[0].cimke, 'BÉKÉS');
+
+    const osszes = megyesorok.sorok.reduce(function (a, s) { return a + s.hivas + s.latogatas; }, 0);
+    const varhato = lista.filter(function (s) { return s.hivasBe; }).length
+        + lista.filter(function (s) { return s.latogatasBe; }).length;
+    egyenlo('minden tétel bekerül a rácsba', osszes, varhato);
+
+    const fajsorok = E.evesRacs(lista, { sorMod: 'faj', kartya: 'faj', honapok: mind });
+    igaz('faj módban a faj a sor', fajsorok.sorok.every(function (s) { return s.cimke.indexOf('›') === -1; }));
+
+    const ketto = E.evesRacs(lista, { sorMod: 'fajmegye', kartya: 'partner', honapok: mind });
+    igaz('faj › megye módban kettős a felirat', ketto.sorok.every(function (s) { return s.cimke.indexOf(' › ') !== -1; }));
+
+    // Partner-kártyánál a kártya neve a vevő.
+    const elsoSor = ketto.sorok[0];
+    const elsoHonap = Object.keys(elsoSor.kartyak)[0];
+    igaz('a partner-kártyán a vevő neve áll',
+        ['Nagy Gazda Kft', 'Kis Tanya Bt', 'Mentendő Major Kft'].indexOf(elsoSor.kartyak[elsoHonap][0].cimke) !== -1);
+
+    // Az ablakon kívüli hónap nem kerül be.
+    const ures = E.evesRacs(lista, { sorMod: 'megye', kartya: 'faj', honapok: ['2020-01'] });
+    egyenlo('üres időszakban nincs sor', ures.sorok.length, 0);
+}
+
 // --- munkaigény (a lapon használt bemenettel) --------------------------------
 
 {

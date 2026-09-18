@@ -202,6 +202,25 @@ td input.szeles { width: 9rem; }
 /* Jelölt a naptárban */
 .naptar .tetel.jelolt .nev { color: var(--zold-vilagos); font-style: italic; }
 
+/* Éves rács */
+.egyszerre { align-items: center; gap: 4px; }
+.eves-racs th, .eves-racs td { vertical-align: top; padding: 6px 8px; }
+.eves-racs th { white-space: nowrap; }
+.eves-racs th.mai, .eves-racs td.mai { background: rgba(47, 143, 91, .1); }
+.eves-racs .sorfej { min-width: 11rem; }
+.eves-racs .sorfej b { display: block; }
+.eves-racs .sorfej .alcim { white-space: nowrap; }
+.eves-racs td.cella { min-width: 8.5rem; }
+
+.evkartya {
+    display: block; border-radius: 8px; padding: 3px 8px; margin-bottom: 4px;
+    font-size: 12px; line-height: 1.35; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    border: 1px solid transparent;
+}
+.evkartya .db { font-weight: 700; margin-right: 5px; }
+.evkartya .jel { opacity: .8; margin-left: 5px; }
+
 /* Nézetváltó és naptár */
 .nezetvalto { display: flex; gap: 6px; }
 .ful.kicsi-ful { padding: 5px 14px; font-size: 13px; }

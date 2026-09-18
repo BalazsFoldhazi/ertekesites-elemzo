@@ -319,8 +319,38 @@
                 <div id="naptarRacs" class="naptar"></div>
             </div>
             <div id="tervEves" hidden>
-                <p class="halvany kicsi">Cikkcsoportonként, hónapról hónapra: 📞 hívás · 🚗 látogatás. Így látszik, mikor jön a dömping.</p>
-                <div class="gorgo"><table id="evesTabla"></table></div>
+                <div class="beallitosor">
+                    <span class="nezetvalto">
+                        <button type="button" class="ful kicsi-ful" id="evesElozo" title="Előző időszak">‹</button>
+                        <button type="button" class="ful kicsi-ful" id="evesMa">Ma</button>
+                        <button type="button" class="ful kicsi-ful" id="evesKovetkezo" title="Következő időszak">›</button>
+                    </span>
+                    <span class="nezetvalto">
+                        <button type="button" class="ful kicsi-ful" data-evessor="megye">Megyék</button>
+                        <button type="button" class="ful kicsi-ful" data-evessor="fajmegye">Faj › megye</button>
+                        <button type="button" class="ful kicsi-ful" data-evessor="faj">Csak fajok</button>
+                    </span>
+                    <span class="nezetvalto">
+                        <button type="button" class="ful kicsi-ful" data-eveskartya="partner">Partnerek</button>
+                        <button type="button" class="ful kicsi-ful" data-eveskartya="faj">Fajok</button>
+                    </span>
+                    <span class="nezetvalto egyszerre">
+                        <span class="halvany kicsi">Egyszerre</span>
+                        <button type="button" class="ful kicsi-ful" data-eveshonap="1">1</button>
+                        <button type="button" class="ful kicsi-ful" data-eveshonap="3">3</button>
+                        <button type="button" class="ful kicsi-ful" data-eveshonap="6">6</button>
+                        <button type="button" class="ful kicsi-ful" data-eveshonap="12">12</button>
+                        <span class="halvany kicsi">hónap</span>
+                    </span>
+                </div>
+                <p class="halvany kicsi">
+                    Sorok: megyék, faj › megye vagy csak fajok; oszlopok a hónapok. A kártyán a darabszám,
+                    mellette 📞 hívás · 🚗 látogatás. A mai hónap oszlopa kiemelve.
+                    <strong>Tevékenységek</strong> (találkozó, rendezvény, levél) itt nincsenek: ez az adatkör
+                    csak eladásokat tartalmaz.
+                </p>
+                <div class="gorgo"><table id="evesTabla" class="eves-racs"></table></div>
+                <p id="evesUres" class="halvany kicsi"></p>
             </div>
         </div>
     </section>
