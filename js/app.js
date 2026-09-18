@@ -19,6 +19,8 @@
         szuro: { ev: '', megye: '', uzletkoto: '', cikkcsoport: '', piac: '', q: '' },
         // Betöltéskor eldöntött kezelés: mínuszos sorok és euróban jelölt tételek.
         dontes: { negativ: 'valtozatlan', eur: 'marad', arfolyam: 0, fedezet: 'igen' },
+        // Igaz, ha az átvizsgálást már lezártad – akkor a panel összecsukva indul.
+        dontesKesz: false,
         nezet: 'ertekesites',
         korrekcio: 0,
         besorolas: { platinaFt: 5000000, kozel: 70, szuro: '' },
@@ -138,6 +140,8 @@
     function betolt(sorok, forras) {
         A.sorok = sorok;
         A.forras = forras;
+        // Új fájlnál újra kérdezünk: a panel nyitva indul.
+        A.dontesKesz = false;
         ment();
         indul();
         // Ha van adat, a betöltő összecsukódik – egy kattintással kinyitható.
@@ -162,7 +166,7 @@
             localStorage.setItem(TAR, JSON.stringify({
                 sorok: A.sorok, forras: A.forras, szuro: A.szuro, besorolas: A.besorolas,
                 terv: A.terv, tervB: A.tervB, mi: A.mi, korrekcio: A.korrekcio,
-                dontes: A.dontes,
+                dontes: A.dontes, dontesKesz: A.dontesKesz,
                 tervCsoport: A.tervCsoport, tervEgyeni: A.tervEgyeni, tervSzuro: A.tervSzuro,
                 tervCsoportosit: A.tervCsoportosit, tervNezet: A.tervNezet, naptarHonap: A.naptarHonap,
                 evesSorMod: A.evesSorMod, evesKartya: A.evesKartya, evesHonapDb: A.evesHonapDb, evesTol: A.evesTol,
@@ -185,6 +189,7 @@
                 if (t[k] && typeof t[k] === 'object') A[k] = Object.assign(A[k], t[k]);
             });
             if (Array.isArray(t.jeloltek)) A.jeloltek = t.jeloltek;
+            A.dontesKesz = !!t.dontesKesz;
             A.korrekcio = Number(t.korrekcio) || 0;
             if (t.tervCsoportosit !== undefined) A.tervCsoportosit = !!t.tervCsoportosit;
             if (t.nezet) A.nezet = t.nezet;
@@ -1551,6 +1556,12 @@
         var a = E.atvizsgalas(A.sorok);
         doboz.hidden = a.negativDb === 0 && a.eurDb === 0 && a.fedezetDb === 0;
 
+        // Ha már döntöttél, a panel összecsukva marad – egy kattintással nyílik.
+        doboz.open = !A.dontesKesz;
+        $('dontesFejlec').textContent = A.dontesKesz
+            ? 'Adatkezelés: ' + dontesRovid() + ' — kattints ide a módosításhoz'
+            : 'Az adat átvizsgálása — döntsd el, mi legyen ezekkel';
+
         $('dontesOsszegzes').textContent = szam(a.sor) + ' sor beolvasva'
             + (a.elso ? ' · ' + datumCimke(a.elso) + ' – ' + datumCimke(a.utolso) : '')
             + ' · ezekről érdemes dönteni, mielőtt számolunk:';
@@ -1586,16 +1597,19 @@
 
     /** Egy mondatban, mi lett a döntés – hogy később is látszódjon. */
     function dontesUzenet() {
-        var r = [];
-        r.push(A.dontes.negativ === 'kihagy' ? 'a mínuszos sorokat kihagyjuk'
-            : (A.dontes.negativ === 'pozitiv' ? 'a mínuszos sorokat pozitívra állítjuk'
-                : 'a mínuszos sorok változatlanok (levonódnak)'));
-        r.push(A.dontes.eur === 'valt'
-            ? 'az euróban jelölt sorokat ' + szam(A.dontes.arfolyam, 2) + ' Ft/EUR árfolyamon átváltjuk'
-            : 'az euróban jelölt sorokat nem váltjuk át');
-        r.push(fedezetKell() ? 'a fedezettel is számolunk' : 'a fedezetet nem vesszük figyelembe');
+        return 'Beállítva: ' + dontesRovid() + '.';
+    }
 
-        return 'Beállítva: ' + r.join(' · ') + '.';
+    /** Röviden, mi a döntés – ez áll a becsukott panel fejlécében. */
+    function dontesRovid() {
+        var r = [];
+        r.push(A.dontes.negativ === 'kihagy' ? 'mínuszos sorok kihagyva'
+            : (A.dontes.negativ === 'pozitiv' ? 'mínuszos sorok pozitívra állítva'
+                : 'mínuszos sorok változatlanul'));
+        if (A.dontes.eur === 'valt') r.push(szam(A.dontes.arfolyam, 2) + ' Ft/EUR átváltás');
+        r.push(fedezetKell() ? 'fedezettel' : 'fedezet nélkül');
+
+        return r.join(' · ');
     }
 
     function indul() {
@@ -1646,6 +1660,7 @@
                 return;
             }
 
+            A.dontesKesz = true;
             ment();
             indul();
             allapot(dontesUzenet());
